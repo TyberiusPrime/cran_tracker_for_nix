@@ -32,7 +32,7 @@ class CranTrack:
     """
 
     def __init__(self, snapshot_dates=None):
-        self.store_path = self.store_path = (
+        self.store_path = (
             (store_path / "cran").absolute().relative_to(Path(".").absolute())
         )
         self.store_path.mkdir(exist_ok=True, parents=True)
@@ -40,6 +40,10 @@ class CranTrack:
             self.snapshot_dates = snapshot_dates
         else:
             self.snapshot_dates = self.list_snapshots()
+
+    @staticmethod
+    def get_url(snapshot_date):
+        return f"{base_url}{snapshot_date.strftime('%Y-%m-%d')}/"
 
     @staticmethod
     def list_snapshots():
@@ -55,6 +59,18 @@ class CranTrack:
         else:
             result = json.loads(cache_filename.read_text())
         return result
+
+    @staticmethod
+    def list_downloaded_snapshots():
+        sp = (store_path / "cran").absolute().relative_to(
+            Path(".").absolute()
+        ) / "packages"
+        res = []
+        for fn in sp.glob("*.json.gz"):
+            d = fn.name[: fn.name.find(".")]
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", d):
+                res.append(d)
+        return sorted(res)
 
     def refresh_snapshots(self):
         """Download snapshot packages,
@@ -118,7 +134,9 @@ class CranTrack:
                 / "deltas"
                 / f"delta_{a.snapshot if a else None}_{b.snapshot}.json.gz",
                 build_delta,
-            ).depends_on(a, b)
+            )
+            j.depends_on(a)
+            j.depends_on(b)
             j.snapshot = b.snapshot
             deltas.append(j)
 
@@ -157,7 +175,7 @@ class CranTrack:
             ) in self.assemble_all_packages().items():
 
                 def do(output_filename, snapshot=snapshot):
-                    # sometimes CRAN apperantly starts listing a package days before 
+                    # sometimes CRAN apperantly starts listing a package days before
                     # the package file actually exists
                     # example rpart_4.1-12.tar.gz, 2018-01-11, which shows up on the 13th.
                     def add_days(snapshot, offset):
@@ -192,3 +210,23 @@ class CranTrack:
         ppg2.JobGeneratingJob(
             "gen_download_and_hash", gen_download_and_hash
         ).depends_on(package_list_jobs)
+
+    def latest_packages_at_date(self, snapshot_date):
+        snapshot_date = snapshot_date.date()
+        package_info = read_json(self.store_path / "package_to_snapshot.json.gz")
+        result = {}
+        for (
+            name,
+            version,
+            (pkg_date, (depends, imports, needs_compilation)),
+        ) in package_info:
+            pkg_date = datetime.datetime.strptime(pkg_date, "%Y-%m-%d").date()
+            if pkg_date <= snapshot_date:
+                if not name in result or result[name]["date"] < snapshot_date:
+                    result[name] = {
+                        "version": version,
+                        "date": pkg_date,
+                        "depends": depends,
+                        "imports": imports,
+                    }
+        return result

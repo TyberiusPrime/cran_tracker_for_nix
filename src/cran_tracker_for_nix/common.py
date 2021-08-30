@@ -154,12 +154,13 @@ def write_json(data, fn):
 
 
 def hash_url(url, path):
-    r = requests.get(url)
-    if r.status_code != 200:
-        raise ValueError("non 200 return", r.status_code)
-
-    h = hashlib.sha256(r.content).hexdigest()
-    path.write_text(h)
+    with requests.get(url, stream=True) as r:
+        if r.status_code != 200:
+            raise ValueError("non 200 return", r.status_code)
+        h = hashlib.sha256()
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            h.update(chunk)
+    path.write_text(h.hexdigest())
 
 
 def hash_job(url, path):
