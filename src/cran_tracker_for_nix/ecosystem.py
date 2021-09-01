@@ -8,9 +8,10 @@ from .common import store_path, write_json
 
 
 class REcosystem:
-    def __init__(self, filter_to_releases = None):
+    def __init__(self, filter_to_releases=None):
         self.bc = BioConductorTrack()
         self.filter_to_releases = filter_to_releases
+        self._sha_cache = {}
 
     def update(self):
         try:
@@ -19,7 +20,9 @@ class REcosystem:
             bcvs = {}
             releases = list(self.bc.iter_releases())
             if self.filter_to_releases:
-                releases = [x for x in releases if x.str_version in self.filter_to_releases][:1]
+                releases = [
+                    x for x in releases if x.str_version in self.filter_to_releases
+                ][:1]
                 if not releases:
                     raise ValueError("filtered all")
             for bcv in releases:
@@ -43,7 +46,7 @@ class REcosystem:
         finally:
             commit()
 
-    def dump(self, date, output_folder):
+    def dump(self, date, output_filename):
         """Dump a json with all the info we need to build packages from a given date"""
 
         bioc_version = self.bc.date_to_version(date)
@@ -100,8 +103,16 @@ class REcosystem:
         bioc_annotation_packages = bioc_release.get_packages("annotation", archive_date)
         bioc_software_packages = bioc_release.get_packages("software", archive_date)
 
+        bl = set()
+        if bioc_release.blacklist is not None:
+            bl.update(bioc_release.blacklist)
+        bl.update(bioc_release.get_blacklist_at_date(archive_date))
+
         all_packages = {}
         for name, v in cran_packages.items():
+            if name in bl:
+                print("blacklisted from cran", name)
+                continue
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
@@ -111,7 +122,18 @@ class REcosystem:
                 ).read_text(),
                 "source": 0,
             }
+            if v["needs_compilation"]:
+                all_packages[name]["needs_compilation"] = True
+            if (name, v["version"]) in ct.manual_url_overwrites:
+                all_packages[name]["url"] = ct.manual_url_overwrites[
+                    (name, v["version"])
+                ]
+                del all_packages[name]["source"]
+
         for name, v in bioc_experiment_packages.items():
+            if name in bl:
+                print("blacklisted from experiment", name)
+                continue
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
@@ -122,6 +144,9 @@ class REcosystem:
                 "source": 2,
             }
         for name, v in bioc_annotation_packages.items():
+            if name in bl:
+                print("blacklisted from annotation", name)
+                continue
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
@@ -132,16 +157,18 @@ class REcosystem:
                 "source": 3,
             }
         for name, v in bioc_software_packages.items():
+            if name in bl:
+                print("blacklisted from bioc", name)
+                continue
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
                 "depends": sorted(set(v["imports"] + v["depends"])),
-                "sha256": Path(
+                "sha256": self.get_sha(
                     f"data/bioconductor/{bioc_release.str_version}/sha256/{name}_{v['version']}.sha256"
-                ).read_text(),
+                ),
                 "source": 4 if v.get("archive", False) else 1,
             }
-
         self.verify_package_tree(all_packages)
         all_packages = {
             k: all_packages[k] for k in sorted(all_packages)
@@ -150,7 +177,13 @@ class REcosystem:
             "header": header,
             "packages": all_packages,
         }
-        write_json(out, output_filename)
+        write_json(out, output_filename, True)
+        return bioc_version
+
+    def get_sha(self, fn):
+        if not fn in self._sha_cache:
+            self._sha_cache[fn] = Path(fn).read_text()
+        return self._sha_cache[fn]
 
     def verify_package_tree(self, packages):
         ok = True
@@ -163,32 +196,43 @@ class REcosystem:
         if not ok:
             raise ValueError("Missing deps/imports")
 
+    def get_cran_dates(self):
+        res = set()
+        for bioc_release in self.bcvs.values():
+            res.update(bioc_release.get_cran_dates())
+        return sorted(res)
+
 
 def main():
-    r = REcosystem(["1.8"])
+    r = REcosystem()
     print("running update")
     r.update()
-    dump_track_dir = Path('dumped')
+    dump_track_dir = Path("dumped")
     dump_track_dir.mkdir(exist_ok=True)
     already_dumped = [fn.name for fn in dump_track_dir.glob("*")]
     for date in r.get_cran_dates():
         if not date.strftime("%Y-%m-%d") in already_dumped:
-            print('dumping', date)
-            r.dump(date, Path("../r_ecosystem_track/r_ecosystem.json.gz"))
-            commit('r_ecosystem.json.gz', '../r_ecosystem_track', 'Update to {date:%Y-%m-%d}')
+            print("dumping", date)
+            bc_version = r.dump(date, Path("../r_ecosystem_track/r_ecosystem.json.gz"))
+            commit(
+                ["r_ecosystem.json.gz"],
+                "../r_ecosystem_track",
+                f"Update to {date:%Y-%m-%d}, bioconductor {'.'.join(bc_version)}",
+            )
             (dump_track_dir / f"{date:%Y-%m-%d}").write_text("")
 
 
 #    r.dump(datetime.date(year=2018, month=1, day=15), Path("../r_ecosystem_track"))
 
 
-def commit(add=['data'], cwd=store_path.parent, message = 'autocommit'):
+def commit(add=["data"], cwd=store_path.parent, message="autocommit"):
     """commit our downloaded data"""
     subprocess.check_call(["git", "add"] + add, cwd=cwd)
     p = subprocess.Popen(
         ["git", "commit", "-m", message],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        cwd=cwd,
     )
     stdout, stderr = p.communicate()
     if p.returncode == 0 or b"no changes added" in stdout:

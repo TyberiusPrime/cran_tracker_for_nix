@@ -6,8 +6,12 @@ The replaced packages get moved to archive/ when that's done.
 So we need to download the current packages,
 and synthesize the lists as of the date the archive versions were created.
 
-Note that we filter for releases >= 3.0, 
-which is when microsoft started their CRAN snapshotting
+Note that we filter for releases >= 3.0,
+which is when microsoft started their CRAN snapshotting.
+The CRAN archive goes back to 2008 (bioconductor 2.2),
+but we would have to synthesize the dependencies/PACKAGES.gz
+and I deemed this to be outside of our scope.
+
 """
 from pathlib import Path
 import requests
@@ -21,6 +25,7 @@ import pprint
 import hashlib
 import collections
 from typing import Tuple
+import random
 import functools
 from lazy import lazy
 import pypipegraph2 as ppg2
@@ -32,12 +37,9 @@ from .common import (
     read_packages_and_versions_from_json,
     hash_job,
     read_json,
+    version_to_tuple,
 )
 from .cran_track import CranTrack
-
-
-def version_to_tuple(v):
-    return tuple([str(int(y)) for y in v.split(".")])
 
 
 class ReleaseInfo:
@@ -113,10 +115,281 @@ class BioConductorTrack:
 
 
 blacklist = {
-    ("3", "6"): [
+    ("3.0"): [
+        "arrayQualityMetrics",  # missing SVGAnnotation
+        "excel.link",  # missing RDCOMClient (omegahat / github only?)
+        "HierO",  # missing XMLRPC
+        "pubmed.mineR",  # missing SSOAP (omegahat / github only?)
+        "RCytoscape",  #  missing XMLRPC
+        "rneos",  # missing XMLRPC
+        "rols",  # SSOAP and XMLSchema (omegahat)
+        # indirect - due to above
+        "RamiGO",  # depends on RCytoscape
+        "NCIgraph",  # depends on RCytoscape
+        "categoryCompare",  # depends on RCytoscape
+        "DEGraph",  # depends on NCIgraph
+    ],
+    ("3.1"): [
+        "arrayQualityMetrics",  # missing SVGAnnotation
+        "excel.link",  # missing RDCOMClient
+        "RCytoscape",  # missing XMLRPC
+        "rols",  # missing SSOAP, XMLSchema
+        # indirect - due to above
+        "NCIgraph",  # depends on RCytoscape
+        "RamiGO",  # depends on RCytoscape
+        "categoryCompare",  # depends on RCytoscape
+        "DEGraph",  # depends on NCIgraph
+    ],
+    (
+        "3.1",
+        "2015-04-17",
+    ): [  # missing at release, but appear in the extra_snapshot below
+        "OmicsMarkeR",  # missing assertive.base
+        "seqplots",  # missing DT, which was not in PACKAGES at release, but showed up at 06-09
+    ],
+    ("3.2"): [
+        "RCytoscape",  # missing XMLRPC
+        "rols",  # SSOAP and XMLSchema (omegahat)
+        "arrayQualityMetrics",  # missing SVGAnnotation
+        # indirect - due to above
+        "NCIgraph",  # depends on RCytoscape
+        "RamiGO",  # depends on RCytoscape
+        "categoryCompare",  # depends on RCytoscape
+        "DEGraph",  # depends on NCIgraph
+    ],
+    ("3.2", "2015-10-14"): [
+        "MSstats",  # missing ggrepel - added sometime within this bioconductor release, see extra_snapshots
+    ],
+    ("3.3"): [
+        "RCytoscape",  # depends on XMLRPC
+        "arrayQualityMetrics",  # missing SVGAnnotation
+        # indirect - due to above
+        "NCIgraph",  # depends on RCytoscape
+        "RamiGO",  # depends on RCytoscape
+        "categoryCompare",  # depends on RCytoscape
+        "EGAD",  # depends on arrayQualityMetrics
+        "DEGraph",  # depends on NCIgraph
+    ],
+    ("3.4"): [
+        "RCytoscape",  # depends on XMLRPC
+        "arrayQualityMetrics",  # missing SVGAnnotation
+        # indirect - due to above
+        "NCIgraph",  # depends on RCytoscape
+        "RamiGO",  # depends on RCytoscape
+        "categoryCompare",  # depends on RCytoscape
+        "EGAD",  # depends on arrayQualityMetrics
+        "DEGraph",  # depends on NCIgraph
+    ],
+    ("3.5"): [
+        "RCytoscape",  # depends on XMLRPC
+        "arrayQualityMetrics",  # missing SVGAnnotation
+        # indirect - due to above
+        "NCIgraph",  # depends on RCytoscape
+        "RamiGO",  # depends on RCytoscape
+        "categoryCompare",  # depends on RCytoscape
+        "EGAD",  # depends on arrayQualityMetrics
+        "DEGraph",  # depends on NCIgraph
+    ],
+    ("3.5", "2017-04-25"): [
+        "grasp2db",  # missing dbplyr
+        "BiocFileCache",  # missing dbplyr
+        "Organism.dplyr",  # missing dbplyr
+        "metagenomeFeatures",  # missing dbplyr
+        # indirect
+        "greengenes13.5MgDb",  # missing metagenomeFeatures
+    ],
+    ("3.6"): [
         "RCytoscape",  # depends on XMLRPC which is not in cran (was apperantly at one point on r-forge, is no longer). Might be in conda
         "RamiGO",  # needs RCytoscape
-    ]
+    ],
+    ("3.7"): [
+        "iontree",
+        "domainsignatures"
+        # bioconductor deprecates packages, removes their .tar.gz
+        # but doesn't bother with fixing the PACKAGES
+        # or marking them there in any way...
+    ],
+    ("3.10"): [
+        "charmData",  # missing charm, which has deprecated
+    ],
+    ("3.10", "<2019-11-15"): [
+        "animalcules",  # missing reactable - 3.10 was release on "2019-10-30", but reactable doesn't show up before 2019-11-16
+    ],
+    ("3.11"): [
+        "REIDS",  # missing GenomeGraphs, wich was deprecated in 3.10 already and is missing in 3.11
+        "MTseekerData",  # missing MTseeker, wich was deprecated in 3.10 already and is missing in 3.11
+        "RIPSeekerData",  # missing RIPSeeker, wich was deprecated in 3.10 already and is missing in 3.11
+        "lpNet",  # missing nem, wich was deprecated in 3.10 already and is missing in 3.11
+    ],
+    ("3.12"): [
+        # deseq is deprecated in 3.12
+        "AbsFilterGSEA",  # missing DESeq
+        "APAlyzer",  # missing DESeq
+        "apmsWAPP",  # missing DESeq
+        "ArrayExpressHTS",  # missing DESeq
+        "DBChIP",  # missing DESeq
+        "DEsubs",  # missing DESeq
+        "EDDA",  # missing DESeq
+        "MAMA",  # missing MergeMaid
+        "MAMA",  # missing metaArray
+        "metaseqR",  # missing DESeq
+        "Polyfit",  # missing DESeq
+        "REIDS",  # missing GenomeGraphs
+        "rnaSeqMap",  # missing DESeq
+        "scGPS",  # missing DESeq
+        "SeqGSEA",  # missing DESeq
+        "Tnseq",  # missing DESeq
+        "tRanslatome",  # missing DESeq
+        "vulcan",  # missing DESeq
+        "funbarRF",  # missing BioSeqClass bioseqclass is deprecated
+        "facsDorit",  # missing prada, prada is deprecated
+        "RNAither",  # missing prada
+        "cellHTS2",  # missing prada
+        "FunciSNP",  # missing FunciSNP.data, dep is depreceated
+        "GeneExpressionSignature",  # missing PGSEA, dep is depreceated
+        "Nebulosa",  # missing SeuratObject
+        "RchyOptimyx",  # missing flowType, dep is depreceated
+        "miRLAB",  # missing Roleswitch, dep is depreceated
+        "PGA",  # missing rTANDEM, dep is deprecated
+        "sapFinder",  # missing rTANDEM, dep is deprecated
+        "shinyTANDEM",  # missing rTANDEM, dep is deprecated
+        "msgbsR",  # missing easyRNASeq # easyRNAseq - there is a mac binary, but no source, and it's not in PACKAGES.gz. It does reappear in 3.13
+        # indirect
+        "RNAinteract",  # missing cellHTS2
+        "gespeR",  # missing cellHTS2
+        "imageHTS",  # missing cellHTS2
+        "metagene",  # missing DBChIP
+        "staRank",  # missing cellHTS2
+        # third level
+        "RNAinteractMAPK",  # missing RNAinteract
+        "Imetagene",  # missing metagene
+        "eiR",  # missing gespeR
+    ],
+    ("3.12", "<2021-01-23"): [
+        "spicyR",  # missing spatstat.core # this shows up 2021-01-23 in mran
+    ],
+    ("3.12", "<2021-01-16"): [
+        "spicyR",  # missing spatstat.geom # this show sup 2021-01-16
+    ],
+    ("3.12", "<2021-03-02"): [
+        "systemPipeShiny",  # missing drawer # drawer shows up 2021-03-02
+    ],
+    ("3.12", "<2021-02-25"): [
+        "systemPipeShiny",  # missing spsComps # this shows up 2021-02-25, # missing spsUtil # this shows up 2021-02-17
+    ],
+    ("3.13"): [
+        # all with deprecated dependencies, or removed because they were deprecated before.
+        "AbsFilterGSEA",  # missing DESeq
+        "Tnseq",  # missing DESeq
+        "apmsWAPP",  # missing DESeq
+        "ArrayBin",  # missing SAGx
+        "BACA",  # missing RDAVIDWebService
+        "CompGO",  # missing RDAVIDWebService
+        "MAMA",  # missing MergeMaid
+        "MAMA",  # missing metaArray
+        "REIDS",  # missing GenomeGraphs
+        "funbarRF",  # missing BioSeqClass
+        "methyAnalysis",  # missing genoset
+        "humarray",  # missing genoset
+        "synapterdata",  # missing synapter  # no source package
+        "CytoTree",  # missing destiny # no source package
+        "ctgGEM",  # missing destiny
+        "methyAnalysis",  # missing bigmemoryExtras
+        "phemd",  # missing destiny
+        "greengenes13.5MgDb",  # missing metagenomeFeatures
+        "ribosomaldatabaseproject11.5MgDb",  # missing metagenomeFeatures
+        "silva128.1MgDb",  # missing metagenomeFeatures
+    ],
+    ("3.13", "<2021-08-16"): [
+        # yulab.utils only shows up at this date
+        "clusterProfiler",  # missing yulab.utils
+        "ggtree",  # missing yulab.utils
+        "meshes",  # missing yulab.utils
+        "seqcombo",  # missing yulab.utils
+        # indirect
+        "AutoPipe",  # missing clusterProfiler
+        "MoonFinder",  # missing clusterProfiler
+        "RVA",  # missing clusterProfiler
+        "immcp",  # missing clusterProfiler
+        "CEMiTool",  # missing clusterProfiler
+        "CeTF",  # missing clusterProfiler
+        "DAPAR",  # missing clusterProfiler
+        "GDCRNATools",  # missing clusterProfiler
+        "IRISFGM",  # missing clusterProfiler
+        "MAGeCKFlute",  # missing clusterProfiler
+        "MoonlightR",  # missing clusterProfiler
+        "PFP",  # missing clusterProfiler
+        "RNASeqR",  # missing clusterProfiler
+        "TCGAbiolinksGUI",  # missing clusterProfiler
+        "TimiRGeN",  # missing clusterProfiler
+        "bioCancer",  # missing clusterProfiler
+        "conclus",  # missing clusterProfiler
+        "debrowser",  # missing clusterProfiler
+        "eegc",  # missing clusterProfiler
+        "enrichTF",  # missing clusterProfiler
+        "esATAC",  # missing clusterProfiler
+        "famat",  # missing clusterProfiler
+        "fcoex",  # missing clusterProfiler
+        "methylGSA",  # missing clusterProfiler
+        "miRspongeR",  # missing clusterProfiler
+        "multiSight",  # missing clusterProfiler
+        "netboxr",  # missing clusterProfiler
+        "signatureSearch",  # missing clusterProfiler
+        # missing ggtree, which is missing because of ggfun (see below) and yulab.utils
+        'dowser',
+        "enrichplot",  # missing ggtree
+        "genBaRcode",  # missing ggtree
+        "ggtreeExtra",  # missing ggtree
+        "harrietr",  # missing ggtree
+        "LymphoSeq",  # missing ggtree
+        "miaViz",  # missing ggtree
+        "MicrobiotaProcess",  # missing ggtree
+        "philr",  # missing ggtree
+        "RAINBOWR",  # missing ggtree
+        "singleCellTK",  # missing ggtree
+        "sitePath",  # missing ggtree
+        "STraTUS",  # missing ggtree
+        "systemPipeTools",  # missing ggtree
+        "treekoR",  # missing ggtree
+        # third level
+        "signatureSearchData",  # missing signatureSearch
+        "Prostar",  # missing DAPAR
+        "SpidermiR",  # missing MAGeCKFlute
+        "miRSM",  # missing miRspongeR
+        "ChIPseeker",  # missing enrichplot
+        "ReactomePA",  # missing enrichplot
+        # fourth level
+        "StarBioTrek",  # missing SpidermiR
+        # fourth level
+        "cinaR",  # missing ChIPseeker
+        "ALPS",  # missing ChIPseeker
+        "epihet",  # missing ReactomePA
+        "profileplyr",  # missing ChIPseeker
+        "scTensor",  # missing ReactomePA
+        'pathwayTMB', # missing clusterProfiler
+        #
+    ],
+    ("3.13", "<2021-07-01"): [
+        "ggtree",  # missing ggfun
+    ],
+}
+
+# bioconductor at times forgets to list it's own packages in packages.gz...
+package_patches = {
+    # {'version': {'bioc|experiment|annotation': [{'name':..., 'version': ..., 'depends': [...], 'imports': [...], 'needs_compliation': True}]}}
+}
+
+
+extra_snapshots = {
+    # these get added in addition to the release date / archive date snapshots
+    # because sometimes the snapshots at relaese are simply missingt packages.
+    "3.1": {
+        "2015-08-01": """DT, required by seqplots shows up on  '2015-06-09', but we strive to have only one date.
+assertive.base  is required by OmicsMarkeR
+"""
+    },
+    "3.2": {"2016-01-10": "ggrepel was added to CRAN 2016-01-10"},
+    "3.5": {"2017-06-10": "dbplyr was added to CRAN 2017-06-09"},
 }
 
 
@@ -126,19 +399,24 @@ class BioconductorRelease:
         self.version = version
         self.str_version = ".".join(version)
         self.release_info = release_info
-        self.base_url = f"https://bioconductor.org/packages/{self.str_version}/"
+        self.base_urls = [
+            f"https://bioconductor.org/packages/{self.str_version}/",
+            f"https://bioconductor.statistik.tu-dortmund.de/packages/{self.str_version}/",
+        ]
+        if self.str_version in ("3.1", "3.8"):
+            self.base_url = self.base_urls[
+                0
+            ]  # because the mirror does not actually have these
+        else:
+            self.base_url = random.choice(self.base_urls)
         self.store_path = (
             (store_path / "bioconductor" / self.str_version)
             .absolute()
             .relative_to(Path(".").absolute())
         )
         self.store_path.mkdir(exist_ok=True, parents=True)
-        self.blacklist = None
-        # bioconductor deprecates packages, removes their .tar.gz
-        # but doesn't bother with fixing the PACKAGES
-        # or marking them there in any way...
-        if self.version == ("3", "7"):
-            self.blacklist = set(["iontree", "domainsignatures"])
+        self.blacklist = blacklist.get(self.str_version, None)
+        self.patch_packages = package_patches.get(self.str_version, {})
 
     @lazy
     def date_invariant(self):
@@ -193,6 +471,7 @@ class BioconductorRelease:
             f"gen_download_and_hash_bioconductor_{self.version}", gen_download_and_hash
         )
         phase2.depends_on(phase1)
+        # no need to depende no assembl_all_packages / package pages - it's being done anyway
         return [phase2, phase1]
 
     def download_packages(self):
@@ -297,6 +576,9 @@ class BioconductorRelease:
                 d = datetime.datetime.strptime(vd[1], "%Y-%m-%d").date()
                 d = self.find_closest_available_snapshot(d, available)
                 result.add(d)
+        for str_date in extra_snapshots.get(self.str_version, {}):
+            d = datetime.datetime.strptime(str_date, "%Y-%m-%d").date()
+            result.add(d)
         return result
 
     def find_closest_archive_date(self, date):
@@ -327,7 +609,7 @@ class BioconductorRelease:
         )  # lexographic sorting for the win
         if not ok:
             print(d, sorted(available_snapshots)[-1])
-        return datetime.datetime.strptime(ok[0], "%Y-%m-%d")
+        return datetime.datetime.strptime(ok[0], "%Y-%m-%d").date()
 
     def assemble_all_packages(self):
         out = {}
@@ -343,6 +625,11 @@ class BioconductorRelease:
             self.store_path / "packages.annotation.json.gz"
         ):
             out[name, ver] = f"data/annotation/src/contrib/{name}_{ver}.tar.gz"
+
+        if self.patch_packages:
+            for kind, entries in self.patch_packages.items():
+                for entry in entries:
+                    out[entry["name"], entry["version"]] = entry["path"]
 
         archive = self.load_archive()
         for name, entries in archive.items():
@@ -373,16 +660,49 @@ class BioconductorRelease:
                 "version": version,
                 "depends": depends,
                 "imports": imports,
+                "needs_compilation": needs_compilation,
             }
         if kind == "bioc":
             for package, version_dates in self.load_archive().items():
+                if not package in result:
+                    if package == 'BiocInstaller':
+                        # yeah...  you never distributed biocInstaller via bioconductor otherwise,
+                        # so we're going to ignore you
+                        continue
+                    else:
+                        raise ValueError("Package in archive that was not in PACKAGES.gz")
+
                 for version, date in sorted(version_dates, key=lambda vd: vd[1]):
                     date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
                     if date <= archive_date:
                         result[package]["version"] = version
                         result[package]["archive"] = True
+        for entries in self.patch_packages.get(kind, []):
+            for entry in entries:
+                print("patching", entry["name"])
+                result[entry["name"]] = {
+                    "version": entry["version"],
+                    "depends": entry["depnds"],
+                    "imports": entry["imports"],
+                    "needs_compilation": entry["needs_compilation"],
+                }
 
-        bl = blacklist.get(self.version, None)
-        if bl is not None:
-            result = {k: v for (k, v) in result.items() if k not in bl}
         return result
+
+    def get_blacklist_at_date(self, date):
+        key = f"{date:%Y-%m-%d}"
+        print('get_blacklist_at_date', key)
+        if (self.str_version, key) in blacklist:
+            return blacklist[(self.str_version, key)]
+        else:
+            # consider all <= date as relevant
+            res = set()
+            for bl_key in blacklist:
+                if (
+                    isinstance(bl_key, tuple)
+                    and (bl_key[0] == self.str_version)
+                    and (bl_key[1][0] == "<")
+                    and (key <= bl_key[1][1:])
+                ):
+                    res.update(blacklist[bl_key])
+            return list(res)

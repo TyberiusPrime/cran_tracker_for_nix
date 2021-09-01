@@ -107,6 +107,23 @@ class CranTrack:
             def build_delta(
                 output_filename, a=a.files[0] if a is not None else None, b=b.files[0]
             ):
+                def tie_breaker(name, ver, variant_a, variant_b):
+                    if (name, ver) in [
+                        ("DStree", "1.0"),
+                        ("GMD", "0.3.3"),
+                        ("Gmisc", "1.4.1"),
+                        ("IRTpp", "0.2.6.1"),
+                        ("mixture", "1.4"),
+                        ("rFTRLProximal", "1.0.0"),
+                    ]:
+                        # take the one that says 'needs compilation', for they have cpp files
+                        if variant_a[-1]:
+                            return variant_a
+                        elif variant_b[-1]:
+                            return variant_b
+                    return None  # I have no solution for you today
+
+                errors = []
                 if a is None:
                     pkgs_a = {}
                 else:
@@ -115,19 +132,31 @@ class CranTrack:
                 for ((name, ver), entry) in pkgs_b.items():
                     if (name, ver) in pkgs_a:
                         if pkgs_a[name, ver] != entry:
-                            raise ValueError(
-                                "ParanoiaError - same version, but different dependencies?",
-                                name,
-                                ver,
-                                entry,
-                                a[name, ver],
+                            what_to_use = tie_breaker(
+                                name, ver, entry, pkgs_a[name, ver]
                             )
+                            if what_to_use is not None:
+                                # monkey patch the lists
+                                pkgs_b[name, ver] = what_to_use
+                                del pkgs_a[name, ver]
+                            else:
+                                errors.append(
+                                    (
+                                        "ParanoiaError - same version, but different dependencies/needsCompilation?",
+                                        name,
+                                        ver,
+                                        entry,
+                                        pkgs_a[name, ver],
+                                    )
+                                )
+                if errors:
+                    raise ValueError(errors)
                 out = [
                     entry
                     for ((name, ver), entry) in pkgs_b.items()
                     if not (name, ver) in pkgs_a
                 ]
-                write_json(out, output_filename)
+                write_json(out, output_filename, do_indent=True)
 
             j = ppg2.FileGeneratingJob(
                 self.store_path
@@ -148,7 +177,7 @@ class CranTrack:
                 for name, ver, *others in read_json(fn):
                     out[name, ver] = snapshot, others
             out = [(name, ver, date) for ((name, ver), date) in sorted(out.items())]
-            write_json(out, output_filename)
+            write_json(out, output_filename, do_indent=True)
 
         assemble_job = ppg2.FileGeneratingJob(
             self.store_path / "package_to_snapshot.json.gz", assemble
@@ -164,6 +193,119 @@ class CranTrack:
             out[name, ver] = snapshot
         return out
 
+    manual_url_overwrites = {
+        # sometimes the snashots don't have the file specified by PACKAGES
+        # within +1 month of the date we're looking for.
+        # this helps out then,
+        # either by using another snapshot
+        # or the /Archive of CRAN
+        # or in the no-such-file-anywhere case,
+        # by substituting another file.
+        (
+            "Cairo",
+            "1.5-12.1"
+            # this goes from -12.tar.gz directly to -12.2.tar.gz
+            # (on the transition of  2020-07-07 / 2020-07-08)
+            # and is listed as .2 on 07-08
+            # but is listed as .1 in packages at 2020-10-28 (and had no .1 at 2020-04-28)
+            # no clue why this would have gone backwards,
+        ): "https://mran.microsoft.com/snapshot/2020-07-08/src/contrib/Cairo_1.5-12.2.tar.gz",
+        # the same is true for cairodevice, some dates.
+        (
+            "cairoDevice",
+            "2.28.1"
+            # the very same argument, the very same transition points as Cairo above
+        ): "https://mran.microsoft.com/snapshot/2020-07-08/src/contrib/cairoDevice_2.28.2.tar.gz",
+        (
+            "cairoDevice",
+            "2.28.2",
+        ): "https://mran.microsoft.com/snapshot/2020-07-08/src/contrib/cairoDevice_2.28.2.tar.gz",
+        # fun fact, 2.28.2 is identical to the 2.28.tar.gz that cran/Archive delivers
+        (
+            "foreign",
+            "0.8-70",
+            # had both .70 and .69 entries ath the snapshot date of 2017-12-04
+            # but only the .69 in the snapshot...
+        ): "https://cran.r-project.org/src/contrib/Archive/foreign/foreign_0.8-70.tar.gz",
+        (
+            "foreign",
+            "0.8-70.1",
+            # also missing from snapshot
+        ): "https://cran.r-project.org/src/contrib/Archive/foreign/foreign_0.8-70.1.tar.gz",
+        (
+            "foreign",
+            "0.8-70.2",
+            # also missing from snapshot
+        ): "https://cran.r-project.org/src/contrib/Archive/foreign/foreign_0.8-70.2.tar.gz",
+        (
+            "foreign",
+            "0.8-77",
+            # also missing from snapshot
+        ): "https://cran.r-project.org/src/contrib/Archive/foreign/foreign_0.8-77.tar.gz",
+        (
+            "foreign",
+            "0.8-78",
+            # also missing from snapshot
+        ): "https://cran.r-project.org/src/contrib/Archive/foreign/foreign_0.8-78.tar.gz",
+        (
+            "rpart",
+            "4.1-12",  # not in snapshot, but in archive
+        ): "https://cran.r-project.org/src/contrib/Archive/rpart/rpart_4.1-12.tar.gz",
+        (
+            "sivipm",
+            "1.1-4",  # not in snapshot, but in archive
+        ): "https://cran.r-project.org/src/contrib/Archive/sivipm/sivipm_1.1-4.tar.gz",
+        (
+            "sivipm",
+            "1.1-4.1",  # not in snapshot, but in archive
+        ): "https://cran.r-project.org/src/contrib/Archive/sivipm/sivipm_1.1-4.1.tar.gz",
+        (
+            "survival",
+            "2.42-3.1",
+            # not in snapshot, but in archive
+        ): "https://cran.r-project.org/src/contrib/Archive/survival/survival_2.42-3.1.tar.gz",
+        (
+            "MASS",
+            "7.3-51.2",
+        ): "https://cran.r-project.org/src/contrib/Archive/MASS/MASS_7.3-51.2.tar.gz",
+        (
+            "Delaporte",
+            "7.0.0",
+        ): "https://cran.r-project.org/src/contrib/Archive/Delaporte/Delaporte_7.0.0.tar.gz",
+        (
+            "adimpro",
+            "0.9.0.1",
+        ): "https://cran.r-project.org/src/contrib/Archive/adimpro/adimpro_0.9.2.tar.gz",  # only appears from 2019-10-30 till 11-15, but the file is never present.
+        (
+            "aws",
+            "2.2-1.1",  # can't find that one anywhere
+        ): "https://cran.r-project.org/src/contrib/Archive/aws/aws_2.3-0.tar.gz",
+        (
+            "frailtypack",
+            "3.0.3.2.1",
+        ): "https://cran.r-project.org/src/contrib/Archive/frailtypack/frailtypack_3.0.3.2.1.tar.gz",
+        (
+            "frailtypack",
+            "3.1.0.1",  # can't find that anywhere
+        ): "https://cran.r-project.org/src/contrib/Archive/frailtypack/frailtypack_3.2.0.tar.gz",
+        (
+            "ggiraph",
+            "0.7.0.1",
+        ): "https://cran.r-project.org/src/contrib/Archive/ggiraph/ggiraph_0.7.0.1.tar.gz",
+        (
+            "rvg",
+            "0.2.4.1",
+        ): "https://cran.r-project.org/src/contrib/Archive/rvg/rvg_0.2.4.1.tar.gz",
+        ("svglite", "1.2.3.1"):  # this was quickly updated to be R >1, and .2 be R >4,
+        # and bioconductor at this point is R 4.0, so it's ok to use this one
+        "https://mran.microsoft.com/snapshot/2020-07-08/src/contrib/svglite_1.2.3.2.tar.gz",  #
+        (
+            "vdiffr",
+            "0.3.2.1",
+        ): "https://mran.microsoft.com/snapshot/2020-07-08/src/contrib/vdiffr_0.3.2.2.tar.gz",  # replaced within the week.
+        # }
+    }
+
     def update(self):
         package_list_jobs = self.refresh_snapshots()
 
@@ -174,7 +316,7 @@ class CranTrack:
                 (snapshot, others),
             ) in self.assemble_all_packages().items():
 
-                def do(output_filename, snapshot=snapshot):
+                def do(output_filename, snapshot=snapshot, name=name, version=version):
                     # sometimes CRAN apperantly starts listing a package days before
                     # the package file actually exists
                     # example rpart_4.1-12.tar.gz, 2018-01-11, which shows up on the 13th.
@@ -183,23 +325,35 @@ class CranTrack:
                         date = date + datetime.timedelta(days=offset)
                         return date.strftime("%Y-%m-%d")
 
-                    offset = 0
-                    while offset < 10:  # how far into the future do you want to go?
-                        if offset:
-                            offset_snapshot = add_days(snapshot, offset)
-                        else:
-                            offset_snapshot = snapshot
-                        try:
-                            hash_url(
-                                url=f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz",
-                                path=output_filename,
-                            )
-                            break
-                        except ValueError:
-                            if "404" in str(ValueError):
-                                offset = 1
+                    if (name, version) in self.manual_url_overwrites:
+                        hash_url(
+                            url=self.manual_url_overwrites[name, version],
+                            path=output_filename,
+                        )
+                    else:
+
+                        offset = 0
+                        while offset < 30:  # how far into the future do you want to go?
+                            if offset:
+                                offset_snapshot = add_days(snapshot, offset)
                             else:
-                                raise
+                                offset_snapshot = snapshot
+                            try:
+                                hash_url(
+                                    url=f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz",
+                                    path=output_filename,
+                                )
+                                break
+                            except ValueError:
+                                if "404" in str(ValueError) or "500" in str(
+                                    ValueError
+                                ):  # the server has a tendency to report 500 for certain ssnaphsots
+                                    offset = 1
+                                else:
+                                    raise ValueError(
+                                        "Could not find "
+                                        + f"{base_url}{snapshot}/src/contrib/{name}_{version}.tar.gz"
+                                    )
 
                 ppg2.FileGeneratingJob(
                     self.store_path / "sha256" / (name + "_" + version + ".sha256"),
@@ -212,7 +366,7 @@ class CranTrack:
         ).depends_on(package_list_jobs)
 
     def latest_packages_at_date(self, snapshot_date):
-        snapshot_date = snapshot_date.date()
+        snapshot_date = snapshot_date
         package_info = read_json(self.store_path / "package_to_snapshot.json.gz")
         result = {}
         for (
@@ -228,5 +382,6 @@ class CranTrack:
                         "date": pkg_date,
                         "depends": depends,
                         "imports": imports,
+                        'needs_compilation': needs_compilation,
                     }
         return result
