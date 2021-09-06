@@ -128,6 +128,12 @@ class BioConductorTrack:
 # packages that we kick out of the index
 # per bioconductor release, and sometimes per date.
 # the world ain't perfect 🤷
+# note that we can kick from specific lists by prefixing with one of
+# 'experiment--'.
+# 'annotation--'.
+# 'bioc--'. = bioconductor software
+# 'cran--'.
+# which is necessary when a package is in multiple but we don't want to kick all of them.
 
 blacklist = {
     ("3.0"): [
@@ -143,6 +149,15 @@ blacklist = {
         "NCIgraph",  # depends on RCytoscape
         "categoryCompare",  # depends on RCytoscape
         "DEGraph",  # depends on NCIgraph
+        # these are in both annotation and experiment, but the annotation version number is higher
+        # (3.0.0 vis 1.1.0)
+        "experiment--MafDb.ALL.wgs.phase1.release.v3.20101123",
+        "experiment--MafDb.ESP6500SI.V2.SSA137.dbSNP138",
+        "experiment--phastCons100way.UCSC.hg19",
+        # bioconductor has never versions
+        "cran--GOsummaries",
+        "cran--gdsfmt",
+        "cran--oposSOM",
     ],
     ("3.1"): [
         "arrayQualityMetrics",  # missing SVGAnnotation
@@ -606,7 +621,9 @@ class BioconductorRelease:
         for package, version_dates in self.load_archive().items():
             for vd in version_dates:
                 archive_date = datetime.datetime.strptime(vd[1], "%Y-%m-%d").date()
-                snapshot_date = self.find_closest_available_snapshot(archive_date, available)
+                snapshot_date = self.find_closest_available_snapshot(
+                    archive_date, available
+                )
                 result.add((archive_date, snapshot_date))
         for str_date in extra_snapshots.get(self.str_version, {}):
             d = datetime.datetime.strptime(str_date, "%Y-%m-%d").date()
@@ -641,7 +658,9 @@ class BioconductorRelease:
             [x for x in available_snapshots if x >= d]
         )  # lexographic sorting for the win
         if not ok:
-            raise ValueError('none >=', d, 'latest available', sorted(available_snapshots)[-1])
+            raise ValueError(
+                "none >=", d, "latest available", sorted(available_snapshots)[-1]
+            )
         return datetime.datetime.strptime(ok[0], "%Y-%m-%d").date()
 
     def assemble_all_packages(self):
@@ -686,7 +705,14 @@ class BioconductorRelease:
 
         package_info = read_json(source)
         result = {}
-        for (name, version, depends, imports, linking_to, needs_compilation) in package_info:
+        for (
+            name,
+            version,
+            depends,
+            imports,
+            linking_to,
+            needs_compilation,
+        ) in package_info:
             if name in result:
                 raise ValueError("Duplicate in packages", kind, name)
             result[name] = {

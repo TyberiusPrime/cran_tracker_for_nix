@@ -182,7 +182,7 @@ class RTracker:
             self.store_path / "nixpkgs_for_r_version.json.gz"
         )
         available = rev_to_date_and_commit[r_version]
-        date_ok = sorted([x for x in available if x['date'] < date])
+        date_ok = sorted([x for x in available if x['date'] < date], key=lambda x:x['date'])
         return date_ok[-1]
 
     @staticmethod

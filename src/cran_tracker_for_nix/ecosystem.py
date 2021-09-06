@@ -1,4 +1,5 @@
 import pypipegraph2 as ppg2
+import pprint
 import json
 import datetime
 from pathlib import Path
@@ -70,7 +71,7 @@ class REcosystem:
         nixpkgs_info = self.r_track.decide_nixpkgs_rev_for_R_version(
             r_version, archive_date
         )
-        print("using nixpkgs", nixpkgs_info["commit"], " dated ", nixpkgs_info["date"])
+        print("using nixpkgs", nixpkgs_info["commit"], "dated", nixpkgs_info["date"])
         bioc_release = self.bc.get_release(bioc_version)
         print("using archive date", archive_date)
         print("using snapshot date", snapshot_date)
@@ -90,12 +91,13 @@ class REcosystem:
         bl.update(bioc_release.get_blacklist_at_date(archive_date))
 
         all_packages = {}
+        duplicates = []  # for when there are multiple, we want to know at once
         for name, v in cran_packages.items():
-            if name in bl:
+            if name in bl or ("cran--" + name) in bl:
                 print("blacklisted from cran", name)
                 continue
             if name in all_packages:
-                raise ValueError(f"Duplicate package {name}")
+                duplicates.append((name, {}, "cran", v))
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
@@ -104,6 +106,7 @@ class REcosystem:
                     Path(f"data/cran/sha256/{name}_{v['version']}.sha256")
                 ),
                 "snapshot": snapshot_date,
+                "source": "cran",
             }
             if v["needs_compilation"]:
                 all_packages[name]["needs_compilation"] = True
@@ -113,11 +116,11 @@ class REcosystem:
                 ]
                 del all_packages[name]["source"]
         for name, v in bioc_experiment_packages.items():
-            if name in bl:
+            if name in bl or ("experiment--" + name) in bl:
                 print("blacklisted from experiment", name)
                 continue
             if name in all_packages:
-                raise ValueError(f"Duplicate package {name}")
+                duplicates.append((name, all_packages[name], "bioc-experiment", v))
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
@@ -127,13 +130,14 @@ class REcosystem:
                         f"data/bioconductor/{bioc_release.str_version}/sha256/{name}_{v['version']}.sha256"
                     )
                 ),
+                "source": "bioc-experiment",
             }
         for name, v in bioc_annotation_packages.items():
-            if name in bl:
+            if name in bl or ("annotation--" + name) in bl:
                 print("blacklisted from annotation", name)
                 continue
             if name in all_packages:
-                raise ValueError(f"Duplicate package {name}")
+                duplicates.append((name, all_packages[name], "bioc-annotation", v))
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
@@ -143,13 +147,14 @@ class REcosystem:
                         f"data/bioconductor/{bioc_release.str_version}/sha256/{name}_{v['version']}.sha256"
                     )
                 ),
+                "source": "bioc-annotation",
             }
         for name, v in bioc_software_packages.items():
-            if name in bl:
+            if name in bl or ("bioc--" + name) in bl:
                 print("blacklisted from bioc", name)
                 continue
             if name in all_packages:
-                raise ValueError(f"Duplicate package {name}")
+                duplicates.append((name, all_packages[name], "bioc-software", v))
             all_packages[name] = {
                 "name": name,
                 "version": v["version"],
@@ -159,7 +164,11 @@ class REcosystem:
                         f"data/bioconductor/{bioc_release.str_version}/sha256/{name}_{v['version']}.sha256"
                     )
                 ),
+                "source": "bioc-software",
             }
+        if duplicates:
+            pprint.pprint(duplicates)
+            raise ValueError("Duplicate packages")
         missing = self.verify_package_tree(all_packages, False)
         for m in missing:
             print("hunting for missing package", m)
@@ -189,25 +198,25 @@ class REcosystem:
             "packages": all_packages,
         }
         self.dump_cran_packages(
-            {k: v for (k, v) in all_packages.items() if k in cran_packages},
+            {k: v for (k, v) in all_packages.items() if k in cran_packages and not ('cran--' + k) in bl},
             snapshot_date,
             header,
             output_path / "generated" / "cran-packages.nix",
         )
         self.dump_bioc_packages(
-            {k: v for (k, v) in all_packages.items() if k in bioc_software_packages},
+            {k: v for (k, v) in all_packages.items() if k in bioc_software_packages and not ('bioc--' + k) in bl},
             bioc_version,
             header,
             output_path / "generated" / "bioc-packages.nix",
         )
         self.dump_bioc_packages(
-            {k: v for (k, v) in all_packages.items() if k in bioc_experiment_packages},
+            {k: v for (k, v) in all_packages.items() if k in bioc_experiment_packages and not ('experiment--' + k) in bl},
             bioc_version,
             header,
             output_path / "generated" / "bioc-experiment-packages.nix",
         )
         self.dump_bioc_packages(
-            {k: v for (k, v) in all_packages.items() if k in bioc_annotation_packages},
+            {k: v for (k, v) in all_packages.items() if k in bioc_annotation_packages and not ('annotation--' + k) in bl},
             bioc_version,
             header,
             output_path / "generated" / "bioc-annotation-packages.nix",
@@ -244,6 +253,8 @@ class REcosystem:
             op.write(f'let derive2 = derive {{ snapshot = "{snapshot_date}"; }};\n')
             op.write("in with self; {\n")
             for name, info in sorted(cran_packages.items()):
+                if not ('snapshot' in info):
+                    raise KeyError("missing snapshot", name, info)
                 if not isinstance(info["snapshot"], datetime.date):
                     raise ValueError(type(info["snapshot"]), type(snapshot_date), name)
                 safe_name = name.replace(".", "_")

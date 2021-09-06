@@ -1,0 +1,14 @@
+Done:
+* what is the appropriate R minor version on each date?
+* make it work without running the graph each time (close...)
+* write the previously r-packages generated files.
+* turn r-packages + what I wrote it into a flake
+* version R inside that flake.
+* R versioned install nix
+
+
+
+Open:
+* rpy2 versions? let mach-nix worry about that.
+* can we autodetect the 'require X' packgaes
+* or  the native build inputs
