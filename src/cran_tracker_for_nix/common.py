@@ -1,13 +1,17 @@
 import re
+import tempfile
+import subprocess
+import datetime
 import hashlib
 import json
 import requests
 import gzip
 import pypipegraph2 as ppg2
 from pathlib import Path
+import base64
 
-cache_path = Path("~/.cache/cran_track_for_nix").expanduser()
 store_path = Path(__file__).absolute().parent.parent.parent / "data"
+temp_path = Path(__file__).absolute().parent.parent.parent / "temp"
 
 build_into_r = {
     # built in
@@ -27,9 +31,8 @@ build_into_r = {
     "tcltk",
     "tools",
     "utils",
-    # 'recommended', and not on CRAN
-    "nlme",
-    'BiocInstaller', # that's the bioconductor install package, which is neither in CRAN, nor in bioconductor's package ilsts
+    # "nlme", - but it is on cran
+    "BiocInstaller",  # that's the bioconductor install package, which is neither in CRAN, nor in bioconductor's package ilsts
     # "class",
     # "cluster",
     # "codetools",
@@ -188,6 +191,7 @@ def download_packages(url, output_filename, temp=False):
                 ver,
                 sorted(info.get("depends", [])),
                 sorted(info.get("imports", [])),
+                sorted(info.get("linkingto", [])),
                 info["NeedsCompilation"],
             )
             for ((name, ver), info) in sorted(packages.items())
@@ -202,7 +206,7 @@ def download_packages(url, output_filename, temp=False):
     return jc(
         output_filename,
         download,
-        depend_on_function=False,
+        depend_on_function=True,
     ).depends_on(RPackageParser.get_dependencies())
 
 
@@ -212,17 +216,54 @@ def read_packages_and_versions_from_json(fn):
 
 
 def read_json(fn):
-    return json.loads(gzip.GzipFile(fn, "rb").read().decode("utf-8"))
+    def decode_date(obj):
+        if "date" in obj and isinstance(obj["date"], str) and not "T" in obj["date"]:
+            return datetime.datetime.strptime(
+                obj["date"],
+                "%Y-%m-%d",
+            ).date()
+        if (
+            "datetime" in obj
+            and isinstance(obj["datetime"], str)
+            and "T" in obj["datetime"]
+        ):
+            return datetime.datetime.strptime(obj["date"], "%Y-%m-%dT%H:%M:%SZ")
+
+        return obj
+
+    return json.loads(
+        gzip.GzipFile(fn, "rb").read().decode("utf-8"), object_hook=decode_date
+    )
 
 
 def write_json(data, fn, do_indent=False):
     # you absolutely need to fix the mtime, or your gzip files will always be different
+    def date_encode(object):
+        if isinstance(object, datetime.date):
+            return {"date": f"{object:%Y-%m-%d}"}
+        if isinstance(object, datetime.datetime):
+            return {"date": f"{object:%Y-%m-%dT%H:%M%SZ}"}
+        else:
+            raise TypeError(repr(object) + " is not JSON serialized")
+
     gzip.GzipFile(fn, "wb", mtime=0).write(
-        json.dumps(data, indent=2 if do_indent else None).encode("utf-8")
+        json.dumps(
+            data,
+            indent=2 if do_indent else None,
+            default=date_encode,
+        ).encode("utf-8"),
     )
 
 
-def hash_url(url, path, retries=1):
+def hash_url(url, path, retries=1, subresource_integrity=False):
+    """Sha256 an url, and either write the result to a path,
+    or return it if path is None.
+
+    if subresource_integrity, it will return an SSI hash like
+    sha256-base64=
+
+
+    """
     try:
         with requests.get(url, stream=True) as r:
             if r.status_code != 200:
@@ -235,7 +276,17 @@ def hash_url(url, path, retries=1):
             return hash_url(url, path, retries - 1)
         else:
             raise
-    path.write_text(h.hexdigest())
+    if not subresource_integrity:
+        res = h.hexdigest()
+    else:
+        res = "sha256-" + base64.encodebytes(h.digest())[:-1].decode(
+            "utf-8"
+        )  # cut of \n
+
+    if path is not None:
+        path.write_text(res)
+    else:
+        return res
 
 
 def hash_job(url, path):
@@ -257,10 +308,62 @@ if __name__ == "__main__":
     f = gzip.GzipFile("2020-06-30.gz")
     p = RPackageParser()
     r = p.parse_from_str(f.read().decode("utf-8"))
-    #x = set()
-    #for v in r.values():
-        #x.add(v["NeedsCompilation"])
-    for (k,x),v in r.items():
-        if k == 'svglite':
-            print(x,v)
-    #print(x)
+    # x = set()
+    # for v in r.values():
+    # x.add(v["NeedsCompilation"])
+    for (k, x), v in r.items():
+        if k == "svglite":
+            print(x, v)
+    # print(x)
+
+
+def day_before(date):
+    if isinstance(date, str):
+        d = parse_date(date).datetime()
+        d -= datetime.timedelta(days=1)
+        return d.strftime("%Y-%m-%d")
+    else:
+        raise NotImplementedError()
+        # d = date.datetime()
+        # d -= datetime.timedelta(days=1)
+        # return d.date()
+
+
+def parse_date(date):
+    return datetime.datetime.strptime(date, "%Y-%m-%d").date()
+
+
+def format_date(date):
+    return date.strftime("%Y-%m-%d")
+
+
+def today_invariant():
+    """A ppg invariant to redownload stuff
+    if we run on a later date
+    """
+    return ppg2.ParameterInvariant(
+        # if the end date changes (current release...), we refetch the packages and archives
+        "today",
+        (datetime.date.today().strftime("%Y-%m-%d"),),
+    )
+
+
+def nix_hash_tarball_from_url(url):
+    with tempfile.TemporaryDirectory() as td:
+        tf = open(Path(td) / "tarball.tar.gz", "wb")
+        with requests.get(url, stream=True) as r:
+            if r.status_code != 200:
+                raise ValueError("non 200 return", r.status_code)
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                tf.write(chunk)
+        tf.flush()
+        subprocess.check_call(
+            ["tar", "xf", "tarball.tar.gz", "--strip-components=1"], cwd=td
+        )
+        b16 = (
+            subprocess.check_output(["nix-hash", ".", "--type", "sha256"], cwd=td)
+            .decode("utf-8")
+            .strip()
+        )
+        b64 = base64.b64encode(base64.b16decode(b16.upper()))
+        return "sha256-" + b64.decode('utf-8')

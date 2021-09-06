@@ -7,16 +7,18 @@ import re
 import gzip
 import requests
 from pathlib import Path
+from lazy import lazy
 
+
+from . import common
 from .common import (
-    store_path,
-    cache_path,
     RPackageParser,
     download_packages,
     read_json,
     write_json,
     hash_job,
     hash_url,
+    parse_date,
 )
 
 
@@ -31,40 +33,35 @@ class CranTrack:
     and it's sha256
     """
 
-    def __init__(self, snapshot_dates=None):
+    def __init__(self):
         self.store_path = (
-            (store_path / "cran").absolute().relative_to(Path(".").absolute())
+            (common.store_path / "cran").absolute().relative_to(Path(".").absolute())
         )
         self.store_path.mkdir(exist_ok=True, parents=True)
-        if snapshot_dates:
-            self.snapshot_dates = snapshot_dates
-        else:
-            self.snapshot_dates = self.list_snapshots()
 
     @staticmethod
     def get_url(snapshot_date):
         return f"{base_url}{snapshot_date.strftime('%Y-%m-%d')}/"
 
-    @staticmethod
-    def list_snapshots():
-        """query MRAN for available snapshots"""
-        cache_filename = cache_path / (
-            datetime.datetime.now().strftime("%Y-%m-%d.snapshots")
-        )
-        if not cache_filename.exists():
-            print("listing snapshots")
+    def fetch_snapshots(self):
+        def download(output_filename):
             r = requests.get(base_url)
             result = re.findall(r'<a href="(\d{4}-\d{2}-\d{2})/">', r.text)
-            cache_filename.write_text(json.dumps(result))
-        else:
-            result = json.loads(cache_filename.read_text())
-        return result
+            write_json(result, output_filename)
+
+        fn = self.store_path / "snapshots.json.gz"
+        return ppg2.FileGeneratingJob(fn, download).depends_on(
+            ppg2.ParameterInvariant(fn, datetime.datetime.now().strftime("%Y-%m-%d"))
+        )
+
+    @lazy
+    def snapshots(self):
+        """query MRAN for available snapshots"""
+        return read_json(self.store_path / "snapshots.json.gz")
 
     @staticmethod
     def list_downloaded_snapshots():
-        sp = (store_path / "cran").absolute().relative_to(
-            Path(".").absolute()
-        ) / "packages"
+        sp = common.store_path / "cran" / "packages"
         res = []
         for fn in sp.glob("*.json.gz"):
             d = fn.name[: fn.name.find(".")]
@@ -72,7 +69,7 @@ class CranTrack:
                 res.append(d)
         return sorted(res)
 
-    def refresh_snapshots(self):
+    def refresh_snapshots(self, snapshot_dates):
         """Download snapshot packages,
         build deltas,
         build assembled database
@@ -89,7 +86,7 @@ class CranTrack:
             j.snapshot = snapshot
             return j
 
-        snapshots = sorted(self.snapshot_dates)
+        snapshots = sorted(snapshot_dates)
         sn_jobs = [download_snapshot_packages(s) for s in snapshots]
 
         def read_packages(fn):
@@ -151,12 +148,20 @@ class CranTrack:
                                 )
                 if errors:
                     raise ValueError(errors)
-                out = [
+                gained = [
                     entry
                     for ((name, ver), entry) in pkgs_b.items()
                     if not (name, ver) in pkgs_a
                 ]
-                write_json(out, output_filename, do_indent=True)
+                pkgs_b_names = set([x[0] for x in pkgs_b.keys()])
+                lost = [
+                    name
+                    for ((name, _ver), _entry) in pkgs_a.items()
+                    if not name in pkgs_b_names
+                ]
+                write_json(
+                    {"gained": gained, "lost": lost}, output_filename, do_indent=True
+                )
 
             j = ppg2.FileGeneratingJob(
                 self.store_path
@@ -171,12 +176,40 @@ class CranTrack:
 
         def assemble(output_filename):
             out = {}
-            for delta_job in reversed(deltas):
+            latest = {}
+            prev_snapshot = None
+            for delta_job in deltas:
                 fn = delta_job.files[0]
                 snapshot = delta_job.snapshot
-                for name, ver, *others in read_json(fn):
-                    out[name, ver] = snapshot, others
-            out = [(name, ver, date) for ((name, ver), date) in sorted(out.items())]
+                j = read_json(fn)
+                for name, ver, *others in j["gained"]:
+                    if name in latest:
+                        out[name, latest[name]]["end_date"] = prev_snapshot
+                    if not (name, ver) in out:
+                        out[name, ver] = {
+                            "start_date": snapshot,
+                            "end_date": None,
+                            "imports": others[0],
+                            "depends": others[1],
+                            "linking_to": others[2],
+                            "needs_compilation": others[2],
+                        }
+                        latest[name] = ver
+                for lost_name in j["lost"]:
+                    key = (lost_name, latest[lost_name])
+                    info = out[
+                        key
+                    ]  # so that's (snapshot, others) or (snapshot, others, lost_date)
+                    if info["end_date"] == None:
+                        out[key]["end_date"] = prev_snapshot
+                    else:
+                        # this package&ver was added, lost, and added again
+                        # but since we'll be pulling it from the first snapshot anyway
+                        # and the nix-flake will fall back to /Archive
+                        # we'll just keep it from the first add till the last lost...
+                        pass
+                prev_snapshot = snapshot
+            out = [(name, ver, info) for ((name, ver), info) in sorted(out.items())]
             write_json(out, output_filename, do_indent=True)
 
         assemble_job = ppg2.FileGeneratingJob(
@@ -189,8 +222,8 @@ class CranTrack:
     def assemble_all_packages(self):
         out = {}
         data = read_json(self.store_path / "package_to_snapshot.json.gz")
-        for (name, ver, snapshot) in data:
-            out[name, ver] = snapshot
+        for (name, ver, info) in data:
+            out[name, ver] = info
         return out
 
     manual_url_overwrites = {
@@ -306,17 +339,22 @@ class CranTrack:
         # }
     }
 
-    def update(self):
-        package_list_jobs = self.refresh_snapshots()
+    def update(self, snapshot_dates):
+        package_list_jobs = self.refresh_snapshots(snapshot_dates)
 
         def gen_download_and_hash():
             (self.store_path / "sha256").mkdir(exist_ok=True)
             for (
                 (name, version),
-                (snapshot, others),
+                info,
             ) in self.assemble_all_packages().items():
 
-                def do(output_filename, snapshot=snapshot, name=name, version=version):
+                def do(
+                    output_filename,
+                    snapshot=info["start_date"],
+                    name=name,
+                    version=version,
+                ):
                     # sometimes CRAN apperantly starts listing a package days before
                     # the package file actually exists
                     # example rpart_4.1-12.tar.gz, 2018-01-11, which shows up on the 13th.
@@ -365,23 +403,62 @@ class CranTrack:
             "gen_download_and_hash", gen_download_and_hash
         ).depends_on(package_list_jobs)
 
+    @lazy
+    def package_info(self):
+        return read_json(self.store_path / "package_to_snapshot.json.gz")
+
     def latest_packages_at_date(self, snapshot_date):
         snapshot_date = snapshot_date
-        package_info = read_json(self.store_path / "package_to_snapshot.json.gz")
+        package_info = self.package_info
         result = {}
         for (
             name,
             version,
-            (pkg_date, (depends, imports, needs_compilation)),
+            info,
         ) in package_info:
-            pkg_date = datetime.datetime.strptime(pkg_date, "%Y-%m-%d").date()
+            pkg_date = datetime.datetime.strptime(info["start_date"], "%Y-%m-%d").date()
             if pkg_date <= snapshot_date:
+                pkg_end_date = info["end_date"]
+                if pkg_end_date is not None:
+                    pkg_end_date = datetime.datetime.strptime(
+                        pkg_end_date, "%Y-%m-%d"
+                    ).date()
+                    if pkg_end_date < snapshot_date:  # end date is inclusive
+                        continue
                 if not name in result or result[name]["date"] < snapshot_date:
                     result[name] = {
                         "version": version,
                         "date": pkg_date,
-                        "depends": depends,
-                        "imports": imports,
-                        'needs_compilation': needs_compilation,
+                        "depends": info["depends"],
+                        "imports": info["imports"],
+                        "linking_to": info["linking_to"],
+                        "needs_compilation": info["needs_compilation"],
                     }
         return result
+
+    def find_latest_before_disapperance(self, package, before_date):
+        """Some packages just disappear from CRAN, but of course
+        without pruning downstream packages.
+        Let's slip in the last known version instead.
+
+        This is not necessarily the latest version CRAN ever had.
+        Just the latest within our set of snapshots that we're looking at.
+        """
+        package_info = self.package_info
+        out = None
+        end_date = None
+        for (name, version, info) in package_info:
+            if name == package:
+                if parse_date(info["end_date"]) < before_date:
+                    if not end_date or end_date < info["end_date"]:
+                        end_date = info["end_date"]
+                        out = (name, version, info)
+        if not out:
+            return None
+        return {
+            "name": out[0],
+            "version": out[1],
+            "depends": out[2]["depends"],
+            "imports": out[2]["depends"],
+            "snapshot": parse_date(info["start_date"]),
+        }

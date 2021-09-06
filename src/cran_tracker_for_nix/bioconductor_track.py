@@ -29,9 +29,8 @@ import random
 import functools
 from lazy import lazy
 import pypipegraph2 as ppg2
+from . import common
 from .common import (
-    store_path,
-    cache_path,
     RPackageParser,
     download_packages,
     read_packages_and_versions_from_json,
@@ -39,10 +38,11 @@ from .common import (
     read_json,
     version_to_tuple,
 )
-from .cran_track import CranTrack
 
 
 class ReleaseInfo:
+    """Just a data class"""
+
     def __init__(self, start_date, end_date):
         self.start_date = start_date
         self.end_date = end_date
@@ -55,8 +55,14 @@ class ReleaseInfo:
 
 
 class BioConductorTrack:
+    """Answer questions such as what bioconductor releases are there,
+    do they have an Archive (a folder where the maintainers move package_version.tar.gz
+    when it's superseeded within one bioconductor release", what R version does this
+    release need etc"""
+
     @lazy
     def config_yaml(self):
+        """Retrieve the helpfully provided bioconductor metainformation"""
         url = "https://bioconductor.org/config.yaml"
         r = requests.get(url)
         i = io.StringIO(r.text)
@@ -64,6 +70,7 @@ class BioConductorTrack:
 
     @lazy
     def release_date_ranges(self):
+        """Bioconductor releases, when were they current?"""
         y = self.config_yaml
         release_dates = y["release_dates"]
         r_ver_for_bioc_ver = y["r_ver_for_bioc_ver"]
@@ -84,12 +91,17 @@ class BioConductorTrack:
         return rinfo
 
     def get_R_version(self, release):
+        """Map release to R version"""
         y = self.config_yaml
         if isinstance(release, tuple):
             key = ".".join(release)
         else:
             key = release
         return y["r_ver_for_bioc_ver"][key]
+
+    def get_R_version_including_minor(self, release, archive_date, r_track):
+        major = self.get_R_version(release)
+        return r_track.latest_minor_release_at_date(major, archive_date)
 
     @staticmethod
     def has_archive(version):
@@ -106,13 +118,16 @@ class BioConductorTrack:
             yield self.get_release(version)
 
     def date_to_version(self, date):
+        """Which release was current at {date}"""
         for release, rinfo in self.release_date_ranges.items():
             if rinfo.start_date <= date < rinfo.end_date:
                 return release
         raise KeyError(date)
 
-    # def get_archive_as_of_date(self, date):
 
+# packages that we kick out of the index
+# per bioconductor release, and sometimes per date.
+# the world ain't perfect 🤷
 
 blacklist = {
     ("3.0"): [
@@ -336,7 +351,7 @@ blacklist = {
         "netboxr",  # missing clusterProfiler
         "signatureSearch",  # missing clusterProfiler
         # missing ggtree, which is missing because of ggfun (see below) and yulab.utils
-        'dowser',
+        "dowser",
         "enrichplot",  # missing ggtree
         "genBaRcode",  # missing ggtree
         "ggtreeExtra",  # missing ggtree
@@ -366,7 +381,7 @@ blacklist = {
         "epihet",  # missing ReactomePA
         "profileplyr",  # missing ChIPseeker
         "scTensor",  # missing ReactomePA
-        'pathwayTMB', # missing clusterProfiler
+        "pathwayTMB",  # missing clusterProfiler
         #
     ],
     ("3.13", "<2021-07-01"): [
@@ -374,15 +389,18 @@ blacklist = {
     ],
 }
 
-# bioconductor at times forgets to list it's own packages in packages.gz...
+# At one time I though we had to add packages back in that were present
+# but inexplicably missing from PACKAGES.gz
+# that didn't turn out to be the case, but the code is written...
 package_patches = {
     # {'version': {'bioc|experiment|annotation': [{'name':..., 'version': ..., 'depends': [...], 'imports': [...], 'needs_compliation': True}]}}
 }
 
 
+# these get added in addition to the release date / archive date snapshots
+# because sometimes the snapshots at release are simply missing packages.
+# the value is why we added them.
 extra_snapshots = {
-    # these get added in addition to the release date / archive date snapshots
-    # because sometimes the snapshots at relaese are simply missingt packages.
     "3.1": {
         "2015-08-01": """DT, required by seqplots shows up on  '2015-06-09', but we strive to have only one date.
 assertive.base  is required by OmicsMarkeR
@@ -395,12 +413,15 @@ assertive.base  is required by OmicsMarkeR
 
 @functools.total_ordering
 class BioconductorRelease:
+    """Data fetcher for one bioconductor release"""
+
     def __init__(self, version: Tuple[str, str], release_info):
         self.version = version
         self.str_version = ".".join(version)
         self.release_info = release_info
         self.base_urls = [
             f"https://bioconductor.org/packages/{self.str_version}/",
+            # just to distribute the load (and reduce the runtime) somewhat.
             f"https://bioconductor.statistik.tu-dortmund.de/packages/{self.str_version}/",
         ]
         if self.str_version in ("3.1", "3.8"):
@@ -410,7 +431,7 @@ class BioconductorRelease:
         else:
             self.base_url = random.choice(self.base_urls)
         self.store_path = (
-            (store_path / "bioconductor" / self.str_version)
+            (common.store_path / "bioconductor" / self.str_version)
             .absolute()
             .relative_to(Path(".").absolute())
         )
@@ -420,6 +441,9 @@ class BioconductorRelease:
 
     @lazy
     def date_invariant(self):
+        """A ppg invariant to redownload the packages.gz
+        of the current release when ran again later
+        """
         return ppg2.ParameterInvariant(
             # if the end date changes (current release...), we refetch the packages and archives
             self.store_path / "packages.json.gz",
@@ -547,6 +571,7 @@ class BioconductorRelease:
         ).depends_on(self.date_invariant)
 
     def load_archive(self):
+        """load the archive data - if applicable"""
         if self.has_archive():
             return json.loads(
                 gzip.GzipFile(self.store_path / "archive.json.gz")
@@ -562,26 +587,36 @@ class BioconductorRelease:
         """
         return self >= (3, 6)
 
-    def get_cran_dates(self):
+    def get_cran_dates(self, cran_tracker):
         """Given our package list and what's in the archives,
         what dates actually had changes?
 
         This is the dates we need CRAN at.
         """
         result = set()
-        result.add(self.release_info.start_date)
-        available = CranTrack.list_snapshots()
+        available = cran_tracker.snapshots
+        result.add(
+            (
+                self.release_info.start_date,
+                self.find_closest_available_snapshot(
+                    self.release_info.start_date, available
+                ),
+            )
+        )
         for package, version_dates in self.load_archive().items():
             for vd in version_dates:
-                d = datetime.datetime.strptime(vd[1], "%Y-%m-%d").date()
-                d = self.find_closest_available_snapshot(d, available)
-                result.add(d)
+                archive_date = datetime.datetime.strptime(vd[1], "%Y-%m-%d").date()
+                snapshot_date = self.find_closest_available_snapshot(archive_date, available)
+                result.add((archive_date, snapshot_date))
         for str_date in extra_snapshots.get(self.str_version, {}):
             d = datetime.datetime.strptime(str_date, "%Y-%m-%d").date()
-            result.add(d)
+            # we use these mostly in non-archived Bioconductor versions,
+            # so it's safe to set archive date = snapshot date.
+            result.add((d, d))
         return result
 
-    def find_closest_archive_date(self, date):
+    def find_closest_archive_date(self, date: datetime.date):
+        """Find the closest (previous) date in the archive"""
         all_dates = set()
         for package, version_dates in self.load_archive().items():
             for _version, a_date in version_dates:
@@ -596,19 +631,17 @@ class BioconductorRelease:
         candidates = sorted([x for x in all_dates if x <= date])
         return candidates[-1]
 
-    def find_closest_available_snapshot(self, date, available_snapshots=None):
+    def find_closest_available_snapshot(self, date, available_snapshots):
         """Sometimes MRAN (or Rstudio) does not have a CRAN snapshot
         at the date bioconductor was updated.
         We'll use the next available date instead.
         """
-        if available_snapshots is None:
-            available_snapshots = CranTrack.list_snapshots()
         d = date.strftime("%Y-%m-%d")
         ok = sorted(
             [x for x in available_snapshots if x >= d]
         )  # lexographic sorting for the win
         if not ok:
-            print(d, sorted(available_snapshots)[-1])
+            raise ValueError('none >=', d, 'latest available', sorted(available_snapshots)[-1])
         return datetime.datetime.strptime(ok[0], "%Y-%m-%d").date()
 
     def assemble_all_packages(self):
@@ -653,24 +686,27 @@ class BioconductorRelease:
 
         package_info = read_json(source)
         result = {}
-        for (name, version, depends, imports, needs_compilation) in package_info:
+        for (name, version, depends, imports, linking_to, needs_compilation) in package_info:
             if name in result:
                 raise ValueError("Duplicate in packages", kind, name)
             result[name] = {
                 "version": version,
                 "depends": depends,
                 "imports": imports,
+                "linking_to": linking_to,
                 "needs_compilation": needs_compilation,
             }
         if kind == "bioc":
             for package, version_dates in self.load_archive().items():
                 if not package in result:
-                    if package == 'BiocInstaller':
+                    if package == "BiocInstaller":
                         # yeah...  you never distributed biocInstaller via bioconductor otherwise,
                         # so we're going to ignore you
                         continue
                     else:
-                        raise ValueError("Package in archive that was not in PACKAGES.gz")
+                        raise ValueError(
+                            "Package in archive that was not in PACKAGES.gz"
+                        )
 
                 for version, date in sorted(version_dates, key=lambda vd: vd[1]):
                     date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
@@ -684,6 +720,7 @@ class BioconductorRelease:
                     "version": entry["version"],
                     "depends": entry["depnds"],
                     "imports": entry["imports"],
+                    "linking_to": entry["linking_to"],
                     "needs_compilation": entry["needs_compilation"],
                 }
 
@@ -691,7 +728,7 @@ class BioconductorRelease:
 
     def get_blacklist_at_date(self, date):
         key = f"{date:%Y-%m-%d}"
-        print('get_blacklist_at_date', key)
+        print("get_blacklist_at_date", key)
         if (self.str_version, key) in blacklist:
             return blacklist[(self.str_version, key)]
         else:
