@@ -1,0 +1,76 @@
+[punpacking sources
+[3punpacking source archive /nix/store/zlxv5pp0i9g1bd8wbl4d4bw5sd1fv7hw-qtpaint_0.9.0.tar.gz
+[qsource root is qtpaint
+[q[ppatching sources
+[q[pconfiguring
+[q[pbuilding
+[q[prunning tests
+[q[pinstalling
+* installing *source* package 'qtpaint' ...
+** package 'qtpaint' successfully unpacked and MD5 sums checked
+** libs
+** arch - 
+mkdir -p ../kdebindings-build;
+mkdir -p ../src-build;
+cd ../kdebindings-build; \
+cmake ../kdebindings \
+      -DCMAKE_INSTALL_PREFIX=../inst/local -DQTBASE_DIR=/nix/store/ib1bi06ln8k39xpfw4bjzc063hqn516f-r-qtbase-1.0.4/library/qtbase \
+      -DR_INCLUDE_DIR=/nix/store/blwibf0733d0zavmdja7mnjs1dad3ja0-R-3.1.3/lib/R/include; \
+DYLD_LIBRARY_PATH=:/nix/store/ib1bi06ln8k39xpfw4bjzc063hqn516f-r-qtbase-1.0.4/library/qtbase/local/lib \
+LD_LIBRARY_PATH=/nix/store/blwibf0733d0zavmdja7mnjs1dad3ja0-R-3.1.3/lib/R/lib:/nix/store/5qg9zkkwl89k8ramwhy344ybmgyvrcvs-gfortran-4.9.3/lib:/nix/store/a9p34h8ngiv3b588ygx0s8ynph4wgzyh-openblas-0.2.14/lib:/nix/store/42n8ngmk7b3m6k3nz3k76d0qvc5p4nri-tcl-8.6.4/lib:/nix/store/vmp5ng0s8rk4mhqcm7a185zqvsjxlmxv-tk-8.6.4/lib:/nix/store/1vyxxcwkb1a1n111kh5wspbfh10b1b9l-openjdk-8u60b24-jre/lib/openjdk/jre/lib/amd64/server:/nix/store/blwibf0733d0zavmdja7mnjs1dad3ja0-R-3.1.3/lib/R/lib:/nix/store/5qg9zkkwl89k8ramwhy344ybmgyvrcvs-gfortran-4.9.3/lib:/nix/store/a9p34h8ngiv3b588ygx0s8ynph4wgzyh-openblas-0.2.14/lib:/nix/store/42n8ngmk7b3m6k3nz3k76d0qvc5p4nri-tcl-8.6.4/lib:/nix/store/vmp5ng0s8rk4mhqcm7a185zqvsjxlmxv-tk-8.6.4/lib:/nix/store/1vyxxcwkb1a1n111kh5wspbfh10b1b9l-openjdk-8u60b24-jre/lib/openjdk/jre/lib/amd64/server:/nix/store/ib1bi06ln8k39xpfw4bjzc063hqn516f-r-qtbase-1.0.4/library/qtbase/local/lib make install
+-- The C compiler identification is GNU 4.9.3
+-- The CXX compiler identification is GNU 4.9.3
+-- Check for working C compiler: /nix/store/da03zd6q8j5ywidvjxyck2d0in8cl95j-gfortran-wrapper-4.9.3/bin/gcc
+-- Check for working C compiler: /nix/store/da03zd6q8j5ywidvjxyck2d0in8cl95j-gfortran-wrapper-4.9.3/bin/gcc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /nix/store/da03zd6q8j5ywidvjxyck2d0in8cl95j-gfortran-wrapper-4.9.3/bin/g++
+-- Check for working CXX compiler: /nix/store/da03zd6q8j5ywidvjxyck2d0in8cl95j-gfortran-wrapper-4.9.3/bin/g++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Looking for Q_WS_X11
+-- Looking for Q_WS_X11 - found
+-- Looking for Q_WS_WIN
+-- Looking for Q_WS_WIN - not found
+-- Looking for Q_WS_QWS
+-- Looking for Q_WS_QWS - not found
+-- Looking for Q_WS_MAC
+-- Looking for Q_WS_MAC - not found
+-- Found Qt4: /nix/store/88x19hssay4sabfdxifcw5wzw1qxi8lm-qt-4.8.7/bin/qmake (found version "4.8.7") 
+-- Found OpenGL: /nix/store/zzp6wcjx8j468ncf4m75yl00dpdm8l7k-mesa-noglu-10.6.7/lib/libGL.so  
+-- Build qanviz smoke... 
+-- Configuring done
+-- Generating done
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    R_INCLUDE_DIR
+
+
+-- Build files have been written to: /build/qtpaint/kdebindings-build
+make[1]: Entering directory '/build/qtpaint/kdebindings-build'
+make[2]: Entering directory '/build/qtpaint/kdebindings-build'
+make[3]: Entering directory '/build/qtpaint/kdebindings-build'
+[35m[1mScanning dependencies of target generate_smoke[0m
+make[3]: Leaving directory '/build/qtpaint/kdebindings-build'
+make[3]: Entering directory '/build/qtpaint/kdebindings-build'
+[100%] [34m[1mGenerating smokedata.cpp, x_1.cpp[0m
+/nix/store/ib1bi06ln8k39xpfw4bjzc063hqn516f-r-qtbase-1.0.4/library/qtbase/local/bin/smokegen: error while loading shared libraries: libQtCore.so.4: cannot open shared object file: No such file or directory
+smoke/qanviz/CMakeFiles/generate_smoke.dir/build.make:67: recipe for target 'smoke/qanviz/smokedata.cpp' failed
+make[3]: *** [smoke/qanviz/smokedata.cpp] Error 127
+make[3]: Leaving directory '/build/qtpaint/kdebindings-build'
+CMakeFiles/Makefile2:103: recipe for target 'smoke/qanviz/CMakeFiles/generate_smoke.dir/all' failed
+make[2]: *** [smoke/qanviz/CMakeFiles/generate_smoke.dir/all] Error 2
+make[2]: Leaving directory '/build/qtpaint/kdebindings-build'
+Makefile:127: recipe for target 'all' failed
+make[1]: *** [all] Error 2
+make[1]: Leaving directory '/build/qtpaint/kdebindings-build'
+Makefile:4: recipe for target 'all' failed
+make: *** [all] Error 2
+ERROR: compilation failed for package 'qtpaint'
+* removing '/nix/store/v6avn501d99nr0q0m3na281amff50abl-r-qtpaint-0.9.0/library/qtpaint'
+[q
