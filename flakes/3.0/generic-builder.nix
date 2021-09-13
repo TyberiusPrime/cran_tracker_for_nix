@@ -1,10 +1,10 @@
 { stdenv, R, xvfb_run, utillinux }:
 
-{ name, buildInputs ? [], ... } @ attrs:
+{ name, buildInputs ? [], additional_buildInputs ? [], ... } @ attrs:
 
 stdenv.mkDerivation ({
   buildInputs = buildInputs ++ [R] ++
-                stdenv.lib.optionals attrs.requireX [utillinux xvfb_run];
+                stdenv.lib.optionals attrs.requireX [utillinux xvfb_run] ++ additional_buildInputs;
 
   configurePhase = ''
     runHook preConfigure
@@ -47,4 +47,6 @@ stdenv.mkDerivation ({
   '';
 } // attrs // {
   name = "r-" + name;
+
+  strictDeps = true;
 })

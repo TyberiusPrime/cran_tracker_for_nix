@@ -12,3 +12,7 @@ Open:
 * rpy2 versions? let mach-nix worry about that.
 * can we autodetect the 'require X' packgaes
 * or  the native build inputs
+
+
+* is there a difference between 00Archive and Archive? ( symlink?)
+* can we exploid data in scr/conttrib/Meta?

@@ -16,6 +16,7 @@
         pkgs = import nixpkgs {
           inherit system;
           config = {
+            allowUnfree = true;
             packageOverrides = super: {
               R = super.R.overrideDerivation (old: rec {
                 name = "R-3.1.3";
@@ -41,7 +42,7 @@
         };
         rWrapper = pkgs.callPackage ./wrapper.nix {
           recommendedPackages = with rPackages; [
-            # boot
+            boot
             class
             cluster
             codetools
@@ -63,7 +64,9 @@
         };
 
       in with pkgs; {
+        rWrapper = rWrapper;
+        rPackages = rPackages;
         defaultPackage =
-          rWrapper.override { packages = with rPackages; [ dplyr ]; };
+          rWrapper.override { packages = with rPackages; [ dplyr ] ++ rWrapper.recommendedPackages; };
       });
 }

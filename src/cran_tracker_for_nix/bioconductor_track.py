@@ -29,6 +29,7 @@ import random
 import functools
 from lazy import lazy
 import pypipegraph2 as ppg2
+from networkx.algorithms.dag import descendants
 from . import common
 from .common import (
     RPackageParser,
@@ -38,6 +39,7 @@ from .common import (
     read_json,
     version_to_tuple,
 )
+from . import bioconductor_overrides
 
 
 class ReleaseInfo:
@@ -100,6 +102,8 @@ class BioConductorTrack:
         return y["r_ver_for_bioc_ver"][key]
 
     def get_R_version_including_minor(self, release, archive_date, r_track):
+        if release == ("3", "0"):
+            return "3.1.3"  # 3.1.1 by date, but 3.1.3 is the first in nixpkgs passing it's tests
         major = self.get_R_version(release)
         return r_track.latest_minor_release_at_date(major, archive_date)
 
@@ -129,296 +133,25 @@ class BioConductorTrack:
 # per bioconductor release, and sometimes per date.
 # the world ain't perfect 🤷
 # note that we can kick from specific lists by prefixing with one of
-# 'experiment--'.
-# 'annotation--'.
-# 'bioc--'. = bioconductor software
+# 'bioc_experiment--'.
+# 'bioc_annotation--'.
+# 'bioc_software--'. = bioconductor software
 # 'cran--'.
 # which is necessary when a package is in multiple but we don't want to kick all of them.
 
-blacklist = {
-    ("3.0"): [
-        "arrayQualityMetrics",  # missing SVGAnnotation
-        "excel.link",  # missing RDCOMClient (omegahat / github only?)
-        "HierO",  # missing XMLRPC
-        "pubmed.mineR",  # missing SSOAP (omegahat / github only?)
-        "RCytoscape",  #  missing XMLRPC
-        "rneos",  # missing XMLRPC
-        "rols",  # SSOAP and XMLSchema (omegahat)
-        # indirect - due to above
-        "RamiGO",  # depends on RCytoscape
-        "NCIgraph",  # depends on RCytoscape
-        "categoryCompare",  # depends on RCytoscape
-        "DEGraph",  # depends on NCIgraph
-        # these are in both annotation and experiment, but the annotation version number is higher
-        # (3.0.0 vis 1.1.0)
-        "experiment--MafDb.ALL.wgs.phase1.release.v3.20101123",
-        "experiment--MafDb.ESP6500SI.V2.SSA137.dbSNP138",
-        "experiment--phastCons100way.UCSC.hg19",
-        # bioconductor has never versions
-        "cran--GOsummaries",
-        "cran--gdsfmt",
-        "cran--oposSOM",
-    ],
-    ("3.1"): [
-        "arrayQualityMetrics",  # missing SVGAnnotation
-        "excel.link",  # missing RDCOMClient
-        "RCytoscape",  # missing XMLRPC
-        "rols",  # missing SSOAP, XMLSchema
-        # indirect - due to above
-        "NCIgraph",  # depends on RCytoscape
-        "RamiGO",  # depends on RCytoscape
-        "categoryCompare",  # depends on RCytoscape
-        "DEGraph",  # depends on NCIgraph
-    ],
-    (
-        "3.1",
-        "2015-04-17",
-    ): [  # missing at release, but appear in the extra_snapshot below
-        "OmicsMarkeR",  # missing assertive.base
-        "seqplots",  # missing DT, which was not in PACKAGES at release, but showed up at 06-09
-    ],
-    ("3.2"): [
-        "RCytoscape",  # missing XMLRPC
-        "rols",  # SSOAP and XMLSchema (omegahat)
-        "arrayQualityMetrics",  # missing SVGAnnotation
-        # indirect - due to above
-        "NCIgraph",  # depends on RCytoscape
-        "RamiGO",  # depends on RCytoscape
-        "categoryCompare",  # depends on RCytoscape
-        "DEGraph",  # depends on NCIgraph
-    ],
-    ("3.2", "2015-10-14"): [
-        "MSstats",  # missing ggrepel - added sometime within this bioconductor release, see extra_snapshots
-    ],
-    ("3.3"): [
-        "RCytoscape",  # depends on XMLRPC
-        "arrayQualityMetrics",  # missing SVGAnnotation
-        # indirect - due to above
-        "NCIgraph",  # depends on RCytoscape
-        "RamiGO",  # depends on RCytoscape
-        "categoryCompare",  # depends on RCytoscape
-        "EGAD",  # depends on arrayQualityMetrics
-        "DEGraph",  # depends on NCIgraph
-    ],
-    ("3.4"): [
-        "RCytoscape",  # depends on XMLRPC
-        "arrayQualityMetrics",  # missing SVGAnnotation
-        # indirect - due to above
-        "NCIgraph",  # depends on RCytoscape
-        "RamiGO",  # depends on RCytoscape
-        "categoryCompare",  # depends on RCytoscape
-        "EGAD",  # depends on arrayQualityMetrics
-        "DEGraph",  # depends on NCIgraph
-    ],
-    ("3.5"): [
-        "RCytoscape",  # depends on XMLRPC
-        "arrayQualityMetrics",  # missing SVGAnnotation
-        # indirect - due to above
-        "NCIgraph",  # depends on RCytoscape
-        "RamiGO",  # depends on RCytoscape
-        "categoryCompare",  # depends on RCytoscape
-        "EGAD",  # depends on arrayQualityMetrics
-        "DEGraph",  # depends on NCIgraph
-    ],
-    ("3.5", "2017-04-25"): [
-        "grasp2db",  # missing dbplyr
-        "BiocFileCache",  # missing dbplyr
-        "Organism.dplyr",  # missing dbplyr
-        "metagenomeFeatures",  # missing dbplyr
-        # indirect
-        "greengenes13.5MgDb",  # missing metagenomeFeatures
-    ],
-    ("3.6"): [
-        "RCytoscape",  # depends on XMLRPC which is not in cran (was apperantly at one point on r-forge, is no longer). Might be in conda
-        "RamiGO",  # needs RCytoscape
-    ],
-    ("3.7"): [
-        "iontree",
-        "domainsignatures"
-        # bioconductor deprecates packages, removes their .tar.gz
-        # but doesn't bother with fixing the PACKAGES
-        # or marking them there in any way...
-    ],
-    ("3.10"): [
-        "charmData",  # missing charm, which has deprecated
-    ],
-    ("3.10", "<2019-11-15"): [
-        "animalcules",  # missing reactable - 3.10 was release on "2019-10-30", but reactable doesn't show up before 2019-11-16
-    ],
-    ("3.11"): [
-        "REIDS",  # missing GenomeGraphs, wich was deprecated in 3.10 already and is missing in 3.11
-        "MTseekerData",  # missing MTseeker, wich was deprecated in 3.10 already and is missing in 3.11
-        "RIPSeekerData",  # missing RIPSeeker, wich was deprecated in 3.10 already and is missing in 3.11
-        "lpNet",  # missing nem, wich was deprecated in 3.10 already and is missing in 3.11
-    ],
-    ("3.12"): [
-        # deseq is deprecated in 3.12
-        "AbsFilterGSEA",  # missing DESeq
-        "APAlyzer",  # missing DESeq
-        "apmsWAPP",  # missing DESeq
-        "ArrayExpressHTS",  # missing DESeq
-        "DBChIP",  # missing DESeq
-        "DEsubs",  # missing DESeq
-        "EDDA",  # missing DESeq
-        "MAMA",  # missing MergeMaid
-        "MAMA",  # missing metaArray
-        "metaseqR",  # missing DESeq
-        "Polyfit",  # missing DESeq
-        "REIDS",  # missing GenomeGraphs
-        "rnaSeqMap",  # missing DESeq
-        "scGPS",  # missing DESeq
-        "SeqGSEA",  # missing DESeq
-        "Tnseq",  # missing DESeq
-        "tRanslatome",  # missing DESeq
-        "vulcan",  # missing DESeq
-        "funbarRF",  # missing BioSeqClass bioseqclass is deprecated
-        "facsDorit",  # missing prada, prada is deprecated
-        "RNAither",  # missing prada
-        "cellHTS2",  # missing prada
-        "FunciSNP",  # missing FunciSNP.data, dep is depreceated
-        "GeneExpressionSignature",  # missing PGSEA, dep is depreceated
-        "Nebulosa",  # missing SeuratObject
-        "RchyOptimyx",  # missing flowType, dep is depreceated
-        "miRLAB",  # missing Roleswitch, dep is depreceated
-        "PGA",  # missing rTANDEM, dep is deprecated
-        "sapFinder",  # missing rTANDEM, dep is deprecated
-        "shinyTANDEM",  # missing rTANDEM, dep is deprecated
-        "msgbsR",  # missing easyRNASeq # easyRNAseq - there is a mac binary, but no source, and it's not in PACKAGES.gz. It does reappear in 3.13
-        # indirect
-        "RNAinteract",  # missing cellHTS2
-        "gespeR",  # missing cellHTS2
-        "imageHTS",  # missing cellHTS2
-        "metagene",  # missing DBChIP
-        "staRank",  # missing cellHTS2
-        # third level
-        "RNAinteractMAPK",  # missing RNAinteract
-        "Imetagene",  # missing metagene
-        "eiR",  # missing gespeR
-    ],
-    ("3.12", "<2021-01-23"): [
-        "spicyR",  # missing spatstat.core # this shows up 2021-01-23 in mran
-    ],
-    ("3.12", "<2021-01-16"): [
-        "spicyR",  # missing spatstat.geom # this show sup 2021-01-16
-    ],
-    ("3.12", "<2021-03-02"): [
-        "systemPipeShiny",  # missing drawer # drawer shows up 2021-03-02
-    ],
-    ("3.12", "<2021-02-25"): [
-        "systemPipeShiny",  # missing spsComps # this shows up 2021-02-25, # missing spsUtil # this shows up 2021-02-17
-    ],
-    ("3.13"): [
-        # all with deprecated dependencies, or removed because they were deprecated before.
-        "AbsFilterGSEA",  # missing DESeq
-        "Tnseq",  # missing DESeq
-        "apmsWAPP",  # missing DESeq
-        "ArrayBin",  # missing SAGx
-        "BACA",  # missing RDAVIDWebService
-        "CompGO",  # missing RDAVIDWebService
-        "MAMA",  # missing MergeMaid
-        "MAMA",  # missing metaArray
-        "REIDS",  # missing GenomeGraphs
-        "funbarRF",  # missing BioSeqClass
-        "methyAnalysis",  # missing genoset
-        "humarray",  # missing genoset
-        "synapterdata",  # missing synapter  # no source package
-        "CytoTree",  # missing destiny # no source package
-        "ctgGEM",  # missing destiny
-        "methyAnalysis",  # missing bigmemoryExtras
-        "phemd",  # missing destiny
-        "greengenes13.5MgDb",  # missing metagenomeFeatures
-        "ribosomaldatabaseproject11.5MgDb",  # missing metagenomeFeatures
-        "silva128.1MgDb",  # missing metagenomeFeatures
-    ],
-    ("3.13", "<2021-08-16"): [
-        # yulab.utils only shows up at this date
-        "clusterProfiler",  # missing yulab.utils
-        "ggtree",  # missing yulab.utils
-        "meshes",  # missing yulab.utils
-        "seqcombo",  # missing yulab.utils
-        # indirect
-        "AutoPipe",  # missing clusterProfiler
-        "MoonFinder",  # missing clusterProfiler
-        "RVA",  # missing clusterProfiler
-        "immcp",  # missing clusterProfiler
-        "CEMiTool",  # missing clusterProfiler
-        "CeTF",  # missing clusterProfiler
-        "DAPAR",  # missing clusterProfiler
-        "GDCRNATools",  # missing clusterProfiler
-        "IRISFGM",  # missing clusterProfiler
-        "MAGeCKFlute",  # missing clusterProfiler
-        "MoonlightR",  # missing clusterProfiler
-        "PFP",  # missing clusterProfiler
-        "RNASeqR",  # missing clusterProfiler
-        "TCGAbiolinksGUI",  # missing clusterProfiler
-        "TimiRGeN",  # missing clusterProfiler
-        "bioCancer",  # missing clusterProfiler
-        "conclus",  # missing clusterProfiler
-        "debrowser",  # missing clusterProfiler
-        "eegc",  # missing clusterProfiler
-        "enrichTF",  # missing clusterProfiler
-        "esATAC",  # missing clusterProfiler
-        "famat",  # missing clusterProfiler
-        "fcoex",  # missing clusterProfiler
-        "methylGSA",  # missing clusterProfiler
-        "miRspongeR",  # missing clusterProfiler
-        "multiSight",  # missing clusterProfiler
-        "netboxr",  # missing clusterProfiler
-        "signatureSearch",  # missing clusterProfiler
-        # missing ggtree, which is missing because of ggfun (see below) and yulab.utils
-        "dowser",
-        "enrichplot",  # missing ggtree
-        "genBaRcode",  # missing ggtree
-        "ggtreeExtra",  # missing ggtree
-        "harrietr",  # missing ggtree
-        "LymphoSeq",  # missing ggtree
-        "miaViz",  # missing ggtree
-        "MicrobiotaProcess",  # missing ggtree
-        "philr",  # missing ggtree
-        "RAINBOWR",  # missing ggtree
-        "singleCellTK",  # missing ggtree
-        "sitePath",  # missing ggtree
-        "STraTUS",  # missing ggtree
-        "systemPipeTools",  # missing ggtree
-        "treekoR",  # missing ggtree
-        # third level
-        "signatureSearchData",  # missing signatureSearch
-        "Prostar",  # missing DAPAR
-        "SpidermiR",  # missing MAGeCKFlute
-        "miRSM",  # missing miRspongeR
-        "ChIPseeker",  # missing enrichplot
-        "ReactomePA",  # missing enrichplot
-        # fourth level
-        "StarBioTrek",  # missing SpidermiR
-        # fourth level
-        "cinaR",  # missing ChIPseeker
-        "ALPS",  # missing ChIPseeker
-        "epihet",  # missing ReactomePA
-        "profileplyr",  # missing ChIPseeker
-        "scTensor",  # missing ReactomePA
-        "pathwayTMB",  # missing clusterProfiler
-        #
-    ],
-    ("3.13", "<2021-07-01"): [
-        "ggtree",  # missing ggfun
-    ],
-}
 
-# At one time I though we had to add packages back in that were present
-# but inexplicably missing from PACKAGES.gz
-# that didn't turn out to be the case, but the code is written...
-package_patches = {
-    # {'version': {'bioc|experiment|annotation': [{'name':..., 'version': ..., 'depends': [...], 'imports': [...], 'needs_compliation': True}]}}
-}
-
-
+# at times, the packages.gz is missing dependencies...
 # these get added in addition to the release date / archive date snapshots
 # because sometimes the snapshots at release are simply missing packages.
 # the value is why we added them.
 extra_snapshots = {
+    "3.0": {
+        "2014-10-26": "RSQLITE 1.0.0 needed by bioassayR started being available on this date."
+    },
     "3.1": {
-        "2015-08-01": """DT, required by seqplots shows up on  '2015-06-09', but we strive to have only one date.
-assertive.base  is required by OmicsMarkeR
+        "2015-08-01": """
+ * DT, required by seqplots shows up on '2015-06-09', but we strive to have only one date.
+ * assertive.base is required by OmicsMarkeR
 """
     },
     "3.2": {"2016-01-10": "ggrepel was added to CRAN 2016-01-10"},
@@ -451,8 +184,30 @@ class BioconductorRelease:
             .relative_to(Path(".").absolute())
         )
         self.store_path.mkdir(exist_ok=True, parents=True)
-        self.blacklist = blacklist.get(self.str_version, None)
-        self.patch_packages = package_patches.get(self.str_version, {})
+        self.excluded_packages = bioconductor_overrides.excluded_packages.get(
+            self.str_version, None
+        )
+        self.patch_packages = bioconductor_overrides.package_patches.get(
+            self.str_version, {}
+        )
+        for kind, entries in self.patch_packages.items():
+            self.patch_packages[kind] = self._fix_patches_to_exclude_buildins(entries)
+
+    def _fix_patches_to_exclude_buildins(self, entries):
+        res = []
+        for entry in entries:
+            entry = entry.copy()
+            entry["depends"] = [
+                x for x in entry["depends"] if x not in common.build_into_r
+            ]
+            entry["imports"] = [
+                x for x in entry["imports"] if x not in common.build_into_r
+            ]
+            entry["linking_to"] = [
+                x for x in entry["linking_to"] if x not in common.build_into_r
+            ]
+            res.append(entry)
+        return res
 
     @lazy
     def date_invariant(self):
@@ -543,12 +298,14 @@ class BioconductorRelease:
         return download_packages(
             f"{self.base_url}bioc/src/contrib/PACKAGES.gz",
             self.store_path / "packages.bioc.json.gz",
+            list_packages=False,
         )
 
     def get_annotation_packages(self):
         return download_packages(
             f"{self.base_url}data/annotation/src/contrib/PACKAGES.gz",
             self.store_path / "packages.annotation.json.gz",
+            list_packages=False,
         )
 
     def get_experiment_packages(self):
@@ -556,6 +313,7 @@ class BioconductorRelease:
         return download_packages(
             f"{self.base_url}data/experiment/src/contrib/PACKAGES.gz",
             self.store_path / "packages.experiment.json.gz",
+            list_packages=False,
         )
 
     def get_software_archive(self):
@@ -681,48 +439,48 @@ class BioconductorRelease:
         if self.patch_packages:
             for kind, entries in self.patch_packages.items():
                 for entry in entries:
-                    out[entry["name"], entry["version"]] = entry["path"]
+                    out[entry["name"], entry["version"]] = entry
 
         archive = self.load_archive()
         for name, entries in archive.items():
             for (ver, date) in entries:
                 out[name, ver] = f"bioc/src/contrib/Archive/{name}/{name}_{ver}.tar.gz"
-        if self.blacklist:
+        if self.excluded_packages:
+            # for excluded packages, we don't even try to download a sha
+            # ( some exclusions are because the package is no longer present in bioconductor)
             out = {
                 (name, ver): url
                 for ((name, ver), url) in out.items()
-                if name not in self.blacklist
+                if name not in self.excluded_packages
             }
         return out
 
     def get_packages(self, kind, archive_date):
         if kind in ("experiment", "annotation", "software"):
             if kind == "software":
-                kind = "bioc"
-            source = self.store_path / f"packages.{kind}.json.gz"
+                akind = "bioc"
+            else:
+                akind = kind
+            source = self.store_path / f"packages.{akind}.json.gz"
         else:
             raise ValueError(kind)
 
         package_info = read_json(source)
         result = {}
-        for (
-            name,
-            version,
-            depends,
-            imports,
-            linking_to,
-            needs_compilation,
-        ) in package_info:
+        for info in package_info:
+            name = info["name"]
             if name in result:
                 raise ValueError("Duplicate in packages", kind, name)
-            result[name] = {
-                "version": version,
-                "depends": depends,
-                "imports": imports,
-                "linking_to": linking_to,
-                "needs_compilation": needs_compilation,
-            }
-        if kind == "bioc":
+            if info["os_type"] != "windows":
+                result[name] = {
+                    "version": info["version"],
+                    "depends": info["depends"],
+                    "imports": info["imports"],
+                    "linking_to": info["linking_to"],
+                    "suggests": info["suggests"],
+                    "needs_compilation": info["needs_compilation"],
+                }
+        if kind == "software":
             for package, version_dates in self.load_archive().items():
                 if not package in result:
                     if package == "BiocInstaller":
@@ -739,33 +497,90 @@ class BioconductorRelease:
                     if date <= archive_date:
                         result[package]["version"] = version
                         result[package]["archive"] = True
-        for entries in self.patch_packages.get(kind, []):
-            for entry in entries:
-                print("patching", entry["name"])
-                result[entry["name"]] = {
-                    "version": entry["version"],
-                    "depends": entry["depnds"],
-                    "imports": entry["imports"],
-                    "linking_to": entry["linking_to"],
-                    "needs_compilation": entry["needs_compilation"],
-                }
+
+        for name, add_deps in (
+            bioconductor_overrides.additional_r_dependencies.get(self.str_version, {})
+            .get(kind, {})
+            .items()
+        ):
+            result[name]["depends"] += add_deps
+
+        for entry in self.patch_packages.get(kind, []):
+            print("patching", entry["name"])
+            result[entry["name"]] = {
+                "version": entry["version"],
+                "depends": entry["depends"],
+                "imports": entry["imports"],
+                "linking_to": entry["linking_to"],
+                "suggests": entry["suggests"],
+                "needs_compilation": entry["needs_compilation"],
+            }
 
         return result
 
-    def get_blacklist_at_date(self, date):
+    def get_excluded_packages_at_date(self, date):
         key = f"{date:%Y-%m-%d}"
-        print("get_blacklist_at_date", key)
-        if (self.str_version, key) in blacklist:
-            return blacklist[(self.str_version, key)]
+        if (self.str_version, key) in bioconductor_overrides.excluded_packages:
+            return bioconductor_overrides.excluded_packages[(self.str_version, key)]
         else:
             # consider all <= date as relevant
-            res = set()
-            for bl_key in blacklist:
+            res = {}
+            for bl_key in bioconductor_overrides.excluded_packages:
                 if (
                     isinstance(bl_key, tuple)
                     and (bl_key[0] == self.str_version)
                     and (bl_key[1][0] == "<")
                     and (key <= bl_key[1][1:])
                 ):
-                    res.update(blacklist[bl_key])
-            return list(res)
+                    print("applying", bl_key)
+                    res.update(bioconductor_overrides.excluded_packages[bl_key])
+            return res
+
+    def patch_native_dependencies(self, graph, all_packages, excluded):
+        # this is here because it's bioc version dependent
+        # but it also handles cran packages
+        errors = []
+        for what in ["native_build_inputs", "build_inputs"]:
+            nbi = getattr(bioconductor_overrides, what).get(self.str_version, [])
+            for pkg_name, deps in nbi.items():
+                if not pkg_name in all_packages and not pkg_name in excluded:
+                    errors.append(
+                        f"package with {what} but not in graph or excluded: {pkg_name}"
+                    )
+                    continue
+                all_packages[pkg_name][what] = [
+                    f"pkgs.{n}" if not "." in n else n for n in deps
+                ]
+        for what in [
+            "skip_check",
+        ]:
+            for pkg_name in getattr(bioconductor_overrides, what).get(
+                self.str_version, []
+            ):
+                if pkg_name in all_packages:
+                    all_packages[pkg_name][what] = True
+
+        if errors:
+            raise ValueError("\n".join(errors))
+
+        # extra special magic for samtools injecting zlib
+        for node in graph.successors("Rsamtools"):
+            build_inputs = all_packages[node].get("native_build_inputs", [])
+            build_inputs.append("pkgs.zlib")
+            all_packages[node]["native_build_inputs"] = build_inputs
+
+        needs_x = set(bioconductor_overrides.needs_x.copy())
+        also_needs_x = []
+        for pkg_name, info in all_packages.items():
+            if needs_x.intersection(info["suggests"]) or needs_x.intersection(
+                info["depends"]  # which is depends + linking_to + imports
+            ):
+                also_needs_x.append(pkg_name)
+
+        needs_x.update(also_needs_x)
+        for pkg_name in needs_x:
+            if pkg_name in graph.nodes:
+                all_packages[pkg_name]["needs_x"] = True
+                # for node in descendants(graph, pkg_name):
+                # all_packages[node]["needs_x"] = True
+                # print("setting needs_x", node, pkg_name)

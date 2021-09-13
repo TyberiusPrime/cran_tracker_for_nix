@@ -1,13 +1,19 @@
 import pypipegraph2 as ppg2
+import collections
+import shutil
+import re
 import pprint
 import json
 import datetime
 from pathlib import Path
 import subprocess
+import networkx
+from networkx.algorithms.dag import descendants
 from .bioconductor_track import BioConductorTrack
 from .cran_track import CranTrack
 from .r_track import RTracker
-from .common import store_path, write_json, format_date
+from .common import store_path, write_json, format_date, flake_source_path, temp_path
+from . import bioconductor_track
 
 
 class REcosystem:
@@ -85,153 +91,222 @@ class REcosystem:
         bioc_annotation_packages = bioc_release.get_packages("annotation", archive_date)
         bioc_software_packages = bioc_release.get_packages("software", archive_date)
 
-        bl = set()
-        if bioc_release.blacklist is not None:
-            bl.update(bioc_release.blacklist)
-        bl.update(bioc_release.get_blacklist_at_date(archive_date))
+        bl = {}
+        if bioc_release.excluded_packages is not None:
+            bl.update(bioc_release.excluded_packages)
+        bl.update(bioc_release.get_excluded_packages_at_date(archive_date))
 
+        parts = [
+            self.map_packages(
+                cran_packages,
+                "cran",
+                Path("data/cran/sha256/"),
+                bl,
+                ct.manual_url_overrides,
+                {"snapshot": snapshot_date},
+            ),
+            self.map_packages(
+                bioc_experiment_packages,
+                "bioc_experiment",
+                Path(f"data/bioconductor/{bioc_release.str_version}/sha256/"),
+                bl,
+                None,
+            ),
+            self.map_packages(
+                bioc_annotation_packages,
+                "bioc_annotation",
+                Path(f"data/bioconductor/{bioc_release.str_version}/sha256/"),
+                bl,
+                None,
+            ),
+            self.map_packages(
+                bioc_software_packages,
+                "bioc_software",
+                Path(f"data/bioconductor/{bioc_release.str_version}/sha256/"),
+                bl,
+                None,
+            ),
+        ]
         all_packages = {}
-        duplicates = []  # for when there are multiple, we want to know at once
-        for name, v in cran_packages.items():
-            if name in bl or ("cran--" + name) in bl:
-                print("blacklisted from cran", name)
-                continue
-            if name in all_packages:
-                duplicates.append((name, {}, "cran", v))
-            all_packages[name] = {
-                "name": name,
-                "version": v["version"],
-                "depends": sorted(set(v["imports"] + v["depends"] + v["linking_to"])),
-                "sha256": self.get_sha(
-                    Path(f"data/cran/sha256/{name}_{v['version']}.sha256")
-                ),
-                "snapshot": snapshot_date,
-                "source": "cran",
-            }
-            if v["needs_compilation"]:
-                all_packages[name]["needs_compilation"] = True
-            if (name, v["version"]) in ct.manual_url_overwrites:
-                all_packages[name]["url"] = ct.manual_url_overwrites[
-                    (name, v["version"])
-                ]
-                del all_packages[name]["source"]
-        for name, v in bioc_experiment_packages.items():
-            if name in bl or ("experiment--" + name) in bl:
-                print("blacklisted from experiment", name)
-                continue
-            if name in all_packages:
-                duplicates.append((name, all_packages[name], "bioc-experiment", v))
-            all_packages[name] = {
-                "name": name,
-                "version": v["version"],
-                "depends": sorted(set(v["imports"] + v["depends"] + v["linking_to"])),
-                "sha256": self.get_sha(
-                    Path(
-                        f"data/bioconductor/{bioc_release.str_version}/sha256/{name}_{v['version']}.sha256"
-                    )
-                ),
-                "source": "bioc-experiment",
-            }
-        for name, v in bioc_annotation_packages.items():
-            if name in bl or ("annotation--" + name) in bl:
-                print("blacklisted from annotation", name)
-                continue
-            if name in all_packages:
-                duplicates.append((name, all_packages[name], "bioc-annotation", v))
-            all_packages[name] = {
-                "name": name,
-                "version": v["version"],
-                "depends": sorted(set(v["imports"] + v["depends"] + v["linking_to"])),
-                "sha256": self.get_sha(
-                    Path(
-                        f"data/bioconductor/{bioc_release.str_version}/sha256/{name}_{v['version']}.sha256"
-                    )
-                ),
-                "source": "bioc-annotation",
-            }
-        for name, v in bioc_software_packages.items():
-            if name in bl or ("bioc--" + name) in bl:
-                print("blacklisted from bioc", name)
-                continue
-            if name in all_packages:
-                duplicates.append((name, all_packages[name], "bioc-software", v))
-            all_packages[name] = {
-                "name": name,
-                "version": v["version"],
-                "depends": sorted(set(v["imports"] + v["depends"] + v["linking_to"])),
-                "sha256": self.get_sha(
-                    Path(
-                        f"data/bioconductor/{bioc_release.str_version}/sha256/{name}_{v['version']}.sha256"
-                    )
-                ),
-                "source": "bioc-software",
-            }
+        duplicate_detection = collections.Counter()
+        for p in parts:
+            all_packages.update(p)
+            duplicate_detection.update(p.keys())
+        duplicates = {k for k, v in duplicate_detection.items() if v > 1}
         if duplicates:
             pprint.pprint(duplicates)
             raise ValueError("Duplicate packages")
-        missing = self.verify_package_tree(all_packages, False)
-        for m in missing:
-            print("hunting for missing package", m)
-            replacement = ct.find_latest_before_disapperance(m, snapshot_date)
-            if replacement is None:
-                print("no replacement found")
+        graph = networkx.DiGraph()
+        for name, info in all_packages.items():
+            graph.add_node(name)
+            for d in info["depends"]:
+                graph.add_edge(d, name)
+        excluded_packages_notes = []
+        to_remove = set()
+        for m in bl:
+            if "--" in m:  # that's the source-- excluded_packagess.
                 continue
-            print("replacement", replacement["version"], replacement["snapshot"])
-            all_packages[m] = {
-                "name": m,
-                "version": replacement["version"],
-                "depends": sorted(set(replacement["imports"] + replacement["depends"])),
-                "sha256": Path(
-                    f"data/cran/sha256/{m}_{replacement['version']}.sha256"
-                ).read_text(),
-                "snapshot": replacement["snapshot"],
-            }
-            cran_packages[m] = all_packages[m]
-        if self.verify_package_tree(all_packages, True):
-            raise ValueError("missing dependencies")
+            excluded_packages_notes.append(f"excluded {m} - {bl[m]}")
+            if m in graph.nodes:
+                to_remove.add(m)
+                for downstream in descendants(graph, m):
+                    excluded_packages_notes.append(
+                        f"Excluding {downstream} because of (indirect) dependency on {m}"
+                    )
+                    to_remove.add(downstream)
+            else:
+                raise ValueError(
+                    f"but {m} was not in graph (superflous excluded_packages entry)"
+                )
+        for name in to_remove:
+            graph.remove_node(name)
+        were_excluded = to_remove
+        to_remove = set()
+
+        missing = set(graph.nodes).difference(all_packages)
+        for m in missing:
+            if m in bl:
+                raise NotImplementedError("Do not expect this to happen", m)
+            else:
+                excluded_packages_notes.append(f"hunting for missing package {m}")
+                replacement = ct.find_latest_before_disapperance(m, snapshot_date)
+                if replacement is None:
+                    excluded_packages_notes.append("no replacement found")
+                    continue
+                excluded_packages_notes.append(
+                    f"replaced {replacement['version']} with {replacement['snapshot']} because of CRAN availability"
+                )
+                all_packages[m] = {
+                    "name": m,
+                    "version": replacement["version"],
+                    "depends": sorted(
+                        set(
+                            replacement["imports"]
+                            + replacement["depends"]
+                            + replacement["linking_to"]
+                        )
+                    ),
+                    "sha256": Path(
+                        f"data/cran/sha256/{m}_{replacement['version']}.sha256"
+                    ).read_text(),
+                    "snapshot": replacement["snapshot"],
+                    "source": "cran",
+                }
+                for d in all_packages[m]["depends"]:
+                    graph.add_edge(d, m)
+        for name in to_remove:
+            graph.remove_node(name)
+            del all_packages[name]
+        were_excluded.update(to_remove)
+        # print("\n".join(excluded_packages_notes))
+
+        missing = set(graph.nodes).difference(all_packages)
+        if missing:
+            for m in missing:
+                print(m, list(graph.successors(m)), list(graph.predecessors(m)))
+            raise ValueError("missing dependencies in graph", missing)
+
+        # quick check on the letter distribution - so we can
+        # decide on the sharding.
+        histo = collections.Counter()
+        for name in all_packages:
+            histo[name[0].lower()] += 1
+        print("most common package start letters", histo.most_common())
+
+        bioc_release.patch_native_dependencies(graph, all_packages, were_excluded)
 
         all_packages = {
-            k: all_packages[k] for k in sorted(all_packages)
+            k: all_packages[k] for k in sorted(graph.nodes)
         }  # enforce deterministic output order
         out = {
             "header": header,
             "packages": all_packages,
         }
+        self.clear_output(output_path)
+
+        self.fill_flake(output_path, bioc_version, archive_date)
+
+        (output_path / "generated").mkdir(exist_ok=True)
+        (output_path / "excluded_packages.txt").write_text(
+            "\n".join(excluded_packages_notes)
+        )
+        self.fill_flake(output_path, bioc_version, archive_date)
+
+        readme_text = (output_path / "README.md").read_text()
+        readme_text += "# In This commit\n\n"
+        for k, v in sorted(header.items()):
+            readme_text += f"  * {k}: {v}\n"
+        readme_text += "\n"
+
+        date_notes = bioconductor_track.extra_snapshots.get(
+            ".".join(bioc_version), {}
+        ).get(format_date(archive_date))
+        if date_notes:
+            readme_text += "# Notes on this revision:\n\n" + date_notes.strip() + "\n\n"
+        (output_path / "README.md").write_text(readme_text)
+
         self.dump_cran_packages(
-            {k: v for (k, v) in all_packages.items() if k in cran_packages and not ('cran--' + k) in bl},
+            {k: v for (k, v) in all_packages.items() if v["source"] == "cran"},
             snapshot_date,
             header,
             output_path / "generated" / "cran-packages.nix",
         )
         self.dump_bioc_packages(
-            {k: v for (k, v) in all_packages.items() if k in bioc_software_packages and not ('bioc--' + k) in bl},
+            {k: v for (k, v) in all_packages.items() if v["source"] == "bioc_software"},
             bioc_version,
             header,
             output_path / "generated" / "bioc-packages.nix",
         )
         self.dump_bioc_packages(
-            {k: v for (k, v) in all_packages.items() if k in bioc_experiment_packages and not ('experiment--' + k) in bl},
+            {
+                k: v
+                for (k, v) in all_packages.items()
+                if v["source"] == "bioc_experiment"
+            },
             bioc_version,
             header,
             output_path / "generated" / "bioc-experiment-packages.nix",
         )
         self.dump_bioc_packages(
-            {k: v for (k, v) in all_packages.items() if k in bioc_annotation_packages and not ('annotation--' + k) in bl},
+            {
+                k: v
+                for (k, v) in all_packages.items()
+                if v["source"] == "bioc_annotation"
+            },
             bioc_version,
             header,
             output_path / "generated" / "bioc-annotation-packages.nix",
         )
 
-        self.update_flake_lock(nixpkgs_info, output_path / "flake.lock")
+        add(["."], output_path)
+
+        self.run_nix_build(output_path)
+        self.assert_r_version(output_path, r_version)
+
+        disjoint_package_sets = self.build_disjoint_package_sets(all_packages)
+        test_file = Path(temp_path / "packages_tested")
+        if test_file.exists():
+            offset = int(test_file.read_text())
+        else:
+            offset = 0
+        for ii, package_set in enumerate(disjoint_package_sets):
+            if ii >= offset:
+                print(f"testing package set {ii+1}/{len(disjoint_package_sets)}")
+                self.test_package_set_build(output_path, package_set)
+                test_file.write_text(str(ii + 1))
+
+        raise ValueError(disjoint_package_sets)
+        test_file.unlink()
 
         commit(
             ["."],
             output_path,
             json.dumps(
                 {
-                    "bioconductor": bioc_version,
-                    "r": r_version,
-                    "archive_date": archive_date,
+                    "bioconductor": bioc_release.str_version,
+                    "R": r_version,
+                    "archive_date": format_date(archive_date),
+                    "snapshot_date": format_date(snapshot_date),
                     "nixpkgs": nixpkgs_info["commit"],
                 }
             ),
@@ -239,6 +314,54 @@ class REcosystem:
 
         # write_json(out, output_filename, True)
         return bioc_version
+
+    def map_packages(
+        self,
+        package_dict,
+        source,
+        sha_path,
+        excluded_packages,
+        manual_url_overrides,
+        defaults={},
+    ):
+        res = {}
+
+        for name, v in package_dict.items():
+            # we filter the source-- right here, since there will be another
+            # package of the same name., the other excluded_packages is filtered upstream
+            if (source + "--" + name) in excluded_packages:
+                print(f"excluded from {source}: {name} (presumably present in others)")
+                continue
+            res[name] = {
+                "name": name,
+                "version": v["version"],
+                "depends": sorted(set(v["imports"] + v["depends"] + v["linking_to"])),
+                "suggests": sorted(set(v["suggests"])),
+                "sha256": self.get_sha(sha_path / f"{name}_{v['version']}.sha256"),
+                "source": source,
+                "needs_compilation": v["needs_compilation"],
+            }
+            res[name].update(defaults)
+            if manual_url_overrides and (name, v["version"]) in manual_url_overrides:
+                res[name]["url"] = manual_url_overrides[(name, v["version"])]
+                # del all_packages[name]["source"]
+        return res
+
+    def clear_output(self, output_path):
+        for fn in output_path.glob("*"):
+            if fn.name != ".git":
+                if fn.is_symlink():
+                    fn.unlink()
+                elif fn.is_dir():
+                    shutil.rmtree(fn)
+                else:
+                    fn.unlink()
+
+    def fill_flake(self, output_path, bioc_version, archive_date):
+        source_path = flake_source_path / ".".join(bioc_version)
+        if not source_path.exists():
+            raise ValueError("No flake source found")
+        shutil.copytree(source_path, output_path, dirs_exist_ok=True)
 
     def dump_cran_packages(self, cran_packages, snapshot_date, header, output_path):
         # snapshot_date = format_date(snapshot_date)
@@ -249,11 +372,11 @@ class REcosystem:
                     ("# " + x for x in json.dumps(header, indent=2).strip().split("\n"))
                 )
             )
-            op.write("\n{ self, derive }:\n")
+            op.write("\n{ self, derive, pkgs }:\n")
             op.write(f'let derive2 = derive {{ snapshot = "{snapshot_date}"; }};\n')
             op.write("in with self; {\n")
             for name, info in sorted(cran_packages.items()):
-                if not ('snapshot' in info):
+                if not ("snapshot" in info):
                     raise KeyError("missing snapshot", name, info)
                 if not isinstance(info["snapshot"], datetime.date):
                     raise ValueError(type(info["snapshot"]), type(snapshot_date), name)
@@ -264,13 +387,32 @@ class REcosystem:
                     op.write(
                         f' {safe_name} = derive {{snapshot = "{info["snapshot"]}";}}'
                     )
-                op.write(
-                    f' {{ name="{name}"; version="{info["version"]}";'
-                    + f' sha256="{info["sha256"]}"; depends=[{" ".join(info["depends"])}];}};\n'
-                )
+                self._write_package(name, info, op)
             op.write("}\n")
 
+    def _write_package(self, name, info, op):
+        args = [
+            f'name="{name}"',
+            f'version="{info["version"]}"',
+            f'sha256="{info["sha256"]}"',
+            "depends=[ " + " ".join(info["depends"]).replace(".", "_") + "]",
+        ]
+
+        for (key, arg) in [
+            ("native_build_inputs", "nativeBuildInputs"),
+            ("build_inputs", "buildInputs"),
+        ]:
+            if key in info:
+                args.append(f"{arg} = [" + " ".join(sorted(info[key])) + "]")
+        if info.get("needs_x", False):
+            args.append(f"requireX=true")
+        if info.get("skip_check", False):
+            args.append(f"doCheck=false")
+
+        op.write("{ " + " ".join((x + ";" for x in args)) + "};\n")
+
     def dump_bioc_packages(self, packages, bioc_version, header, output_path):
+        bioc_version = ".".join(bioc_version)
         with open(output_path, "w") as op:
             op.write("# generated by CranTrackForNix\n")
             op.write(
@@ -278,24 +420,71 @@ class REcosystem:
                     ("# " + x for x in json.dumps(header, indent=2).strip().split("\n"))
                 )
             )
-            op.write("\n{ self, derive }:\n")
+            op.write("\n{ self, derive, pkgs }:\n")
             op.write(f'let derive2 = derive {{ biocVersion = "{bioc_version}"; }};\n')
             op.write("in with self; {\n")
             for name, info in sorted(packages.items()):
                 safe_name = name.replace(".", "_")
-                op.write(
-                    f" {safe_name} = derive2"
-                    f' {{ name="{name}"; version="{info["version"]}";'
-                    + f' sha256="{info["sha256"]}"; depends=[{" ".join(info["depends"])}];}};\n'
-                )
+                op.write(f" {safe_name} = derive2")
+                self._write_package(name, info, op)
             op.write("}\n")
 
-    def update_flake_lock(self, nixpkgs_info, output_path):
-        flake = json.loads(output_path.read_text())
-        flake["nodes"]["nixpkgs"]["locked"]["narHash"] = nixpkgs_info["sha256"]
-        flake["nodes"]["nixpkgs"]["locked"]["rev"] = nixpkgs_info["commit"]
-        flake["nodes"]["nixpkgs"]["original"]["rev"] = nixpkgs_info["commit"]
-        output_path.write_text(json.dumps(flake, indent=4))
+    def run_nix_build(self, output_path):
+        subprocess.check_call(
+            [
+                "nix",
+                "build",
+                "--show-trace",
+                "--verbose",
+                "--max-jobs",
+                "auto",
+                "--cores",
+                "2",
+                "--keep-going",
+            ],
+            cwd=output_path,
+        )
+
+    def assert_r_version(self, output_path, r_version):
+        raw = subprocess.check_output(
+            [output_path / "result" / "bin" / "R", "-e", "sessionInfo()"],
+            env={"LC_ALL": "C"},
+        ).decode("utf-8")
+        actual = re.findall("R version ([^ ]+)", raw)[0]
+        assert r_version == actual
+
+    def test_package_set_build(self, output_path, packages):
+        temp_flake_path = temp_path / "test_flake"
+        if temp_flake_path.exists():
+            shutil.rmtree(temp_flake_path)
+        temp_flake_path.mkdir()
+        subprocess.check_call(["git", "init", "."], cwd=temp_flake_path)
+        (temp_flake_path / "flake.nix").write_text(
+            """
+{
+  description = "test flake to check package build";
+
+  inputs = rec {
+    r_flake.url = "path:../../../r_ecosystem_track/";
+
+  };
+
+  outputs = { self, r_flake}: {
+    defaultPackage.x86_64-linux = with r_flake;
+      rWrapper.x86_64-linux.override {
+        packages = with rPackages.x86_64-linux; [ %PACKAGES% ];
+      };
+  };
+}
+""".replace(
+                "%PACKAGES%", " ".join(packages).replace(".", "_")
+            )
+        )
+        subprocess.check_call(["git", "add", "flake.nix"], cwd=temp_flake_path)
+        subprocess.check_call(
+            ["nix", "build", "-j", "auto", "--cores", "2", "--verbose", "--keep-going"],
+            cwd=temp_flake_path,
+        )
 
     def get_sha(self, fn):
         """Get the sha256 of a package if we haven't loaded it yet"""
@@ -324,6 +513,17 @@ class REcosystem:
         for bioc_release in self.bcvs.values():
             res.update(bioc_release.get_cran_dates(self.ct))
         return sorted(res)
+
+    def build_disjoint_package_sets(self, all_packages):
+        """Built a list of package sets that are
+        not interconnected - discrete subcomponents of the dependency graph
+        in essence"""
+
+        g = networkx.Graph()  # technically a DAG, but this should do
+        for pkg_name, info in all_packages.items():
+            for req_name in info["depends"]:
+                g.add_edge(req_name, pkg_name)
+        return sorted(networkx.connected_components(g), key=len)
 
 
 def main():
@@ -361,7 +561,9 @@ def main():
         for x in cran_dates
     ]
 
-    already_dumped = [fn.name for fn in dump_track_dir.glob("*")]
+    already_dumped = [
+        fn.name for fn in dump_track_dir.glob("*") if not fn.name.startswith("updated")
+    ]
     for archive_date, snapshot_date in cran_dates:
         if not archive_date.strftime("%Y-%m-%d") in already_dumped:
             print("dumping", archive_date)
@@ -376,9 +578,13 @@ def main():
 #    r.dump(datetime.date(year=2018, month=1, day=15), Path("../r_ecosystem_track"))
 
 
-def commit(add=["data"], cwd=store_path.parent, message="autocommit"):
-    """commit a github repository"""
+def add(add, cwd):
     subprocess.check_call(["git", "add"] + add, cwd=cwd)
+
+
+def commit(add_paths=["data"], cwd=store_path.parent, message="autocommit"):
+    """commit a github repository"""
+    add(add_paths, cwd)
     p = subprocess.Popen(
         ["git", "commit", "-m", message],
         stdout=subprocess.PIPE,

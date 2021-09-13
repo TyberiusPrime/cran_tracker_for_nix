@@ -12,11 +12,12 @@ import base64
 
 store_path = Path(__file__).absolute().parent.parent.parent / "data"
 temp_path = Path(__file__).absolute().parent.parent.parent / "temp"
+flake_source_path = Path(__file__).absolute().parent.parent.parent / "flakes"
 
 build_into_r = {
     # built in
     "base",
-    "boot",
+    # "boot", # recommended - but is on cran
     "compiler",
     "datasets",
     "grDevices",
@@ -107,23 +108,30 @@ class RPackageParser:
     def get_dependencies():
         return [
             ppg2.FunctionInvariant(RPackageParser.parse_from_str),
-            ppg2.ParameterInvariant("R_builtins", build_into_r),
+            # ppg2.ParameterInvariant("R_builtins", build_into_r),
         ]
 
-    def parse_from_str(self, raw):
+    def parse_from_str(self, raw, existing_tar_gz=None):
+        """If you pass in existing_tar_gz, we will only return such packages that
+        have a tar.gz in the list"""
         pkgs = {}
         errors = []
         for p in self.parse(raw):
-            if p["Package"] in build_into_r:
-                continue
+            # if p["Package"] in build_into_r:
+            # continue
             # p["name"] = p["Package"]
+            tar_gz_name = f"{p['Package']}_{p['Version']}.tar.gz"
+            if existing_tar_gz is not None and not tar_gz_name in existing_tar_gz:
+                print("Skipping because of missing tar.gz", p)
+                continue
             out = {}
-            for x in ("Depends", "Imports", "LinkingTo"):  # "Suggests",
+            for x in ("Depends", "Imports", "LinkingTo", "Suggests"):
                 if p[x]:
                     out[x.lower()] = list(set(p[x]) - build_into_r)
             version = p["Version"] if p["Version"] else ""
             out["Version"] = version
             out["NeedsCompilation"] = p.get("NeedsCompilation", "no") == "yes"
+            out["OS_type"] = p.get("OS_type", "")
             # p["url"] = ( self.base_url + "src/contrib/" + p["name"] + "_" + p["version"] + ".tar.gz")
             if p["Package"] in pkgs:
                 replacement = handle_duplicate_packages_entry(out, pkgs[p["Package"]])
@@ -179,24 +187,46 @@ class RPackageParser:
         return result
 
 
-def download_packages(url, output_filename, temp=False):
+def download_packages(url, output_filename, temp=False, list_packages=True):
+    """Set list_packages = True to filter for packages actually present with a tar.gz
+    (that does not work for bioconductor though!)
+    """
+
     def download(outfilename, url=url):
+        if list_packages:
+            contrib_url = url.replace("PACKAGES.gz", "")
+            print(contrib_url)
+            contrib_req = requests.get(contrib_url)
+            if contrib_req.status_code != 200:
+                raise ValueError("Failed to list packages")
+            tar_gz = [
+                x
+                for x in re.findall(">([^<]+)", contrib_req.text)
+                if x.endswith(".tar.gz")
+            ]
+        else:
+            tar_gz = None
         r = requests.get(url)
+        if r.status_code != 200:
+            raise ValueError("Failed to list packages")
+
         packages = RPackageParser().parse_from_str(
-            gzip.decompress(r.content).decode("utf-8", errors="replace")
+            gzip.decompress(r.content).decode("utf-8", errors="replace"), tar_gz
         )
         output = [
-            (
-                name,
-                ver,
-                sorted(info.get("depends", [])),
-                sorted(info.get("imports", [])),
-                sorted(info.get("linkingto", [])),
-                info["NeedsCompilation"],
-            )
+            {
+                "name": name,
+                "version": ver,
+                "depends": sorted(info.get("depends", [])),
+                "imports": sorted(info.get("imports", [])),
+                "linking_to": sorted(info.get("linkingto", [])),
+                "suggests": sorted(info.get("suggests", [])),
+                "needs_compilation": info["NeedsCompilation"],
+                "os_type": info["OS_type"],
+            }
             for ((name, ver), info) in sorted(packages.items())
         ]
-        write_json(output, output_filename)
+        write_json(output, output_filename, do_indent=True)
 
     if temp:
         jc = ppg2.TempFileGeneratingJob
@@ -212,7 +242,7 @@ def download_packages(url, output_filename, temp=False):
 
 def read_packages_and_versions_from_json(fn):
     for entry in read_json(fn):
-        yield (entry[0], entry[1])
+        yield (entry["name"], entry["version"])
 
 
 def read_json(fn):
@@ -349,7 +379,8 @@ def today_invariant():
 
 
 def nix_hash_tarball_from_url(url):
-    with tempfile.TemporaryDirectory() as td:
+    temp_path.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=temp_path) as td:
         tf = open(Path(td) / "tarball.tar.gz", "wb")
         with requests.get(url, stream=True) as r:
             if r.status_code != 200:
@@ -360,10 +391,21 @@ def nix_hash_tarball_from_url(url):
         subprocess.check_call(
             ["tar", "xf", "tarball.tar.gz", "--strip-components=1"], cwd=td
         )
+        tf.close()
+        Path(tf.name).unlink()
         b16 = (
             subprocess.check_output(["nix-hash", ".", "--type", "sha256"], cwd=td)
             .decode("utf-8")
             .strip()
         )
         b64 = base64.b64encode(base64.b16decode(b16.upper()))
-        return "sha256-" + b64.decode('utf-8')
+        return "sha256-" + b64.decode("utf-8")
+
+
+def dict_minus_keys(d, keys):
+    """remove a list of keys from a dict"""
+    out = d.copy()
+    for k in keys:
+        if k in out:
+            del out[k]
+    return out

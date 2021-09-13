@@ -19,10 +19,12 @@ from .common import (
     hash_job,
     hash_url,
     parse_date,
+    dict_minus_keys,
 )
 
 
 base_url = "https://mran.microsoft.com/snapshot/"
+# base_url = "https://packagemanager.rstudio.com/cran/" # only goes back to 2017
 
 
 class CranTrack:
@@ -81,7 +83,7 @@ class CranTrack:
             j = download_packages(
                 url=f"{base_url}{snapshot}/src/contrib/PACKAGES.gz",
                 output_filename=self.store_path / "packages" / (snapshot + ".json.gz"),
-                temp=True,
+                temp=False,
             )
             j.snapshot = snapshot
             return j
@@ -93,7 +95,8 @@ class CranTrack:
             packages = read_json(fn)
             out = {}
             for row in packages:
-                out[row[0], row[1]] = row
+                if row["os_type"] != "windows":
+                    out[row["name"], row["version"]] = row
             return out
 
         deltas = []
@@ -105,19 +108,28 @@ class CranTrack:
                 output_filename, a=a.files[0] if a is not None else None, b=b.files[0]
             ):
                 def tie_breaker(name, ver, variant_a, variant_b):
-                    if (name, ver) in [
-                        ("DStree", "1.0"),
-                        ("GMD", "0.3.3"),
-                        ("Gmisc", "1.4.1"),
-                        ("IRTpp", "0.2.6.1"),
-                        ("mixture", "1.4"),
-                        ("rFTRLProximal", "1.0.0"),
-                    ]:
+                    but_needs_comp_a = dict_minus_keys(
+                        variant_a, ["needs_compilation", "suggests"]
+                    )
+                    but_needs_comp_b = dict_minus_keys(
+                        variant_b, ["needs_compilation", "suggests"]
+                    )
+
+                    if but_needs_comp_a == but_needs_comp_b:
+                        # only differe in compilation needed
                         # take the one that says 'needs compilation', for they have cpp files
-                        if variant_a[-1]:
+                        if variant_a["needs_compilation"]:
                             return variant_a
-                        elif variant_b[-1]:
+                        elif variant_b["needs_compilation"]:
                             return variant_b
+                        else: # they are identical up to sgugest
+                            la = len(variant_a['suggests'])
+                            lb = len(variant_b['suggests'])
+                            if la > lb:
+                                return variant_a
+                            else:
+                                return variant_b
+
                     return None  # I have no solution for you today
 
                 errors = []
@@ -144,6 +156,8 @@ class CranTrack:
                                         ver,
                                         entry,
                                         pkgs_a[name, ver],
+                                        a,
+                                        b,
                                     )
                                 )
                 if errors:
@@ -182,17 +196,20 @@ class CranTrack:
                 fn = delta_job.files[0]
                 snapshot = delta_job.snapshot
                 j = read_json(fn)
-                for name, ver, *others in j["gained"]:
+                for info in j["gained"]:
+                    name = info["name"]
+                    ver = info["version"]
                     if name in latest:
                         out[name, latest[name]]["end_date"] = prev_snapshot
                     if not (name, ver) in out:
                         out[name, ver] = {
                             "start_date": snapshot,
                             "end_date": None,
-                            "imports": others[0],
-                            "depends": others[1],
-                            "linking_to": others[2],
-                            "needs_compilation": others[2],
+                            "imports": info["imports"],
+                            "depends": info["depends"],
+                            "linking_to": info["linking_to"],
+                            "suggests": info["suggests"],
+                            "needs_compilation": info["needs_compilation"],
                         }
                         latest[name] = ver
                 for lost_name in j["lost"]:
@@ -209,7 +226,11 @@ class CranTrack:
                         # we'll just keep it from the first add till the last lost...
                         pass
                 prev_snapshot = snapshot
-            out = [(name, ver, info) for ((name, ver), info) in sorted(out.items())]
+            out = [
+                (name, ver, info)
+                for ((name, ver), info) in sorted(out.items())
+                if not name in common.build_into_r
+            ]
             write_json(out, output_filename, do_indent=True)
 
         assemble_job = ppg2.FileGeneratingJob(
@@ -226,7 +247,7 @@ class CranTrack:
             out[name, ver] = info
         return out
 
-    manual_url_overwrites = {
+    manual_url_overrides = {
         # sometimes the snashots don't have the file specified by PACKAGES
         # within +1 month of the date we're looking for.
         # this helps out then,
@@ -363,9 +384,9 @@ class CranTrack:
                         date = date + datetime.timedelta(days=offset)
                         return date.strftime("%Y-%m-%d")
 
-                    if (name, version) in self.manual_url_overwrites:
+                    if (name, version) in self.manual_url_overrides:
                         hash_url(
-                            url=self.manual_url_overwrites[name, version],
+                            url=self.manual_url_overrides[name, version],
                             path=output_filename,
                         )
                     else:
@@ -432,6 +453,7 @@ class CranTrack:
                         "depends": info["depends"],
                         "imports": info["imports"],
                         "linking_to": info["linking_to"],
+                        "suggests": info["suggests"],
                         "needs_compilation": info["needs_compilation"],
                     }
         return result

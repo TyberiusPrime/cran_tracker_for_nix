@@ -26,13 +26,35 @@ The whole thing get's parsed, every sha256 of a mentioned package get's calculat
 and a comprehensive json per date is output into a seperate git repo, one commit per date.
 
 
+# Usage:
+flake.nix:
+```nix
+{
+  description = "test flake to check package build";
+
+  inputs = rec {
+    r_flake.url = "github:TyberiusPrime/r_ecosystem?rev=...";
+  };
+
+  outputs = { self, r_flake}: {
+    defaultPackage.x86_64-linux = with r_flake;
+      rWrapper.x86_64-linux.override {
+        packages = with rPackages.x86_64-linux; [ formula_tools operator_tools ];
+      };
+  };
+}
+```
+
+
 # Limitations:
 
  * we only start at Bioconductor 3.0, for MRAN, the microsoft daily cran mirror has no older packages.
-   This could be worked around with by using CRAN's src/contrib/Archive, but we'd have to recrate the dependency graph as well
+   This could be worked around with by using CRAN's src/contrib/Archive, but we'd have to recreate the dependency graph as well
+    and going even further in the c ecosystem get's increasingly tedious.
  * This isn't 'mix and match'. You get one set of packages per date.
  * Everything outside of CRAN/Bioconductor was not considered. 
  * If I failed to find a dependency within a few minutes, the package was blacklisted.
+ * For Bioconductor 3.0 (Oct '14), the C-ecosystem is actually from Sep '15, but with R 3.1.3. Couldn't get the nixpkgs before 15.09 to compile, and R 3.1.1 won't pass it's tests (see https://stat.ethz.ch/pipermail/r-devel/2014-November/070028.html)
 
 
 # Internals

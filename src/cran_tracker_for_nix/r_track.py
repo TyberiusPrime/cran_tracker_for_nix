@@ -132,6 +132,7 @@ class RTracker:
                             "sha256": common.nix_hash_tarball_from_url(
                                 f"https://github.com/NixOS/nixpkgs/tarball/{commit}",
                             ),
+                            "repo": "NixOS/nixpkgs",
                         },
                         output_filename,
                     )
@@ -140,7 +141,10 @@ class RTracker:
                     ppg2.FileGeneratingJob(
                         self.store_path / "nixpkgs_touching_r" / (commit + ".json.gz"),
                         extract,
-                    ).depends_on(ppg2.FunctionInvariant(RTracker.extract_r_version))
+                    ).depends_on(
+                        ppg2.FunctionInvariant(RTracker.extract_r_version),
+                        ppg2.FunctionInvariant(common.nix_hash_tarball_from_url),
+                    )
                 )
 
             def do_compile(output_filename, fns=[x.files[0] for x in jobs]):
@@ -152,6 +156,12 @@ class RTracker:
                 for rev, entries in by_rev.items():
                     # entries.sort(key = lambda x: x['date']) # we sort after filtering
                     rev_to_commit[rev] = entries
+                rev_to_commit = {
+                    rev: entry
+                    for (rev, entry) in sorted(
+                        rev_to_commit.items(), key=lambda x: x[0]
+                    )
+                }
                 common.write_json(rev_to_commit, output_filename, do_indent=True)
 
             ppg2.FileGeneratingJob(
@@ -178,11 +188,22 @@ class RTracker:
         returns [{'r_version': ..., 'date': ,..., 'commit': ..., 'sha256'...}]
         """
         assert isinstance(date, datetime.date)
+        if r_version == "3.1.3":
+            # we had to patch this for inconsolata changes
+            return {
+                "r_version": "3.1.3",
+                "date": datetime.date(2015, 3, 9),
+                "commit": "f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
+                "repo": "TyberiusPrime/nixpkgs",
+            }
+            # , 'sha256': 'sha256-3xbtC4PGpIh9nFLDjvZwVKTVHgHgRqpL4U4iZPkuXW0='}]
         rev_to_date_and_commit = common.read_json(
             self.store_path / "nixpkgs_for_r_version.json.gz"
         )
         available = rev_to_date_and_commit[r_version]
-        date_ok = sorted([x for x in available if x['date'] < date], key=lambda x:x['date'])
+        date_ok = sorted(
+            [x for x in available if x["date"] < date], key=lambda x: x["date"]
+        )
         return date_ok[-1]
 
     @staticmethod
