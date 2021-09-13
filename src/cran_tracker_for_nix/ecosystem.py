@@ -295,7 +295,6 @@ class REcosystem:
                 self.test_package_set_build(output_path, package_set)
                 test_file.write_text(str(ii + 1))
 
-        raise ValueError(disjoint_package_sets)
         test_file.unlink()
 
         commit(
@@ -572,7 +571,7 @@ def main():
             )
             break
 
-    # commit(add=["dumped"], message="autocommit dumped")
+    commit(add_paths=["dumped", "data"], message="autocommit data update & data after update")
 
 
 #    r.dump(datetime.date(year=2018, month=1, day=15), Path("../r_ecosystem_track"))
