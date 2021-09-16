@@ -1,5 +1,167 @@
-excluded_packages = {
-    ("3.0"): {
+from .common import parse_date
+
+
+def _get_last(collector, new_key, default, copy_anyway):
+    """Abstraction to get the last entry.
+    See inherit(...) for  semantics.
+    """
+    if isinstance(new_key, tuple):
+        try:
+            parse_date(new_key[1])
+        except Exception as e:
+            raise ValueError("invalid spec", new_key, e)
+    last = default()
+    if collector:
+        last_key = collector[-1][0]
+        if copy_anyway:
+            last = collector[-1][1]
+        else:
+            if isinstance(last_key, tuple) and isinstance(new_key, tuple):
+                if new_key[0] == last_key[0]:
+                    if new_key[1] <= last_key[1]:
+                        raise ValueError(
+                            "adding later date after earlier date", new_key, last_key
+                        )
+                    else:
+                        last = collector[-1][1]
+            elif (
+                isinstance(last_key, str)
+                and isinstance(new_key, tuple)
+                and new_key[0] == last_key
+            ):
+                last = collector[-1][1]
+    return last
+
+
+def inherit(collector, new_key, new, remove=None, copy_anyway=False):
+    """
+    Inherit the values from the last entry iff
+        - copy_anway is set
+    or
+        - last_key == new_key[0] or last_key[0] == new_key[0]
+        ie. the bioconductor version matches
+
+    """
+    assert isinstance(copy_anyway, bool)
+    assert remove is None or isinstance(remove, list)
+    assert isinstance(collector, list)
+    assert isinstance(new_key, (tuple, str))
+    assert isinstance(new, dict)
+    if isinstance(remove, str):
+        raise TypeError("remove must be a list")
+
+    last = _get_last(collector, new_key, lambda: {}, copy_anyway)
+    out = last.copy()
+    out.update(new)
+    if remove:
+        remove = set(remove)
+        out = {k: v for (k, v) in out.items() if k not in remove}
+    collector.append((new_key, out))
+
+
+def inherit_list(collector, new_key, new, remove=None, copy_anyway=False):
+    """Same as inherit, but just for lists"""
+    assert isinstance(copy_anyway, bool)
+    assert remove is None or isinstance(remove, list)
+    assert isinstance(collector, list)
+    assert isinstance(new_key, (tuple, str))
+    assert isinstance(new, list)
+    last = _get_last(collector, new_key, lambda: [], copy_anyway)
+    out = last[:]
+    out = out + new
+    if remove:
+        remove = set(remove)
+        out = [x for x in out if not x in remove]
+    collector.append((new_key, out))
+
+
+def inherit_to_dict(inherited):
+    return {x[0]: x[1] for x in inherited}
+
+
+# all of these follow the following rules for their keys
+comments = {
+    "3.0": """Nixpkgs: 15.09 (Uses https://github.com/TyberiusPrime/nixpkgs instead of nixOS/nixpgs. Font sha256s needed patching).""",
+    "3.1": """Nixpkgs: 15.09 (Uses https://github.com/TyberiusPrime/nixpkgs instead of nixOS/nixpgs. Font sha256s needed patching).""",
+}
+
+# what flake -source do we use
+flake_info = []
+inherit(
+    flake_info,
+    "3.0",
+    {
+        # that's 15.09
+        "nixpkgs.url": "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
+        "r_version": "3.1.3",
+        "r_tar_gz_sha256": "04kk6wd55bi0f0qsp98ckjxh95q2990vkgq4j83kiajvjciq7s87",
+    },
+)
+inherit(
+    flake_info,
+    "3.1",
+    {
+        "nixpkgs.url": "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
+        "r_version": "3.2.1",
+        "r_tar_gz_sha256": "10n9yhs55v1nnmdgsrgfncw29vq3ly70n8gvy1f4lq7l0hzvr7fm",
+    },
+)
+inherit(
+    flake_info,
+    ("3.1", "2015-10-01"),
+    {
+        "nixpkgs.url": "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
+        "r_version": "3.2.2",
+        "r_tar_gz_sha256": "07a6s865bjnh7w0fqsrkv1pva76w99v86w0w787qpdil87km54cw",
+        "patches": ["./r_patches/fix-tests-without-recommended-packages.patch"],
+    },
+)
+inherit(
+    flake_info,
+    "3.2",
+    {  # still 15.09 - we're in october 15 now.
+        "nixpkgs.url": "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
+        "r_version": "3.2.2",
+        "r_tar_gz_sha256": "07a6s865bjnh7w0fqsrkv1pva76w99v86w0w787qpdil87km54cw",
+        "patches": ["./r_patches/fix-tests-without-recommended-packages.patch"],
+    },
+)
+inherit(
+    flake_info,
+    "3.3",
+    {  # released 2016-05-04 - let's try 16.03 then.
+        "nixpkgs.url": "github:nixOS/nixpkgs?rev=d231868990f8b2d471648d76f07e747f396b9421",
+        "r_version": "3.3.0",
+        # "r_tar_gz_sha256": "10n9yhs55v1nnmdgsrgfncw29vq3ly70n8gvy1f4lq7l0hzvr7fm",
+    },
+)
+inherit(
+    flake_info,
+    "3.4",
+    {  # released 2016-10-18 - let's try 16.09 then.
+        "nixpkgs.url": "github:nixOS/nixpkgs?rev=f22817d8d2bc17d2bcdb8ac4308a4bce6f5d1d2b",
+        "r_version": "3.3.2",  # 3.3.2 came out 2016-10-31. We're still going to useu it I suppose
+        # "r_tar_gz_sha256": "10n9yhs55v1nnmdgsrgfncw29vq3ly70n8gvy1f4lq7l0hzvr7fm",
+    },
+)
+flake_info = inherit_to_dict(flake_info)
+
+
+# packages that we kick out of the index
+# per bioconductor release, and sometimes per date.
+# the world ain't perfect 🤷
+# note that we can kick from specific lists by prefixing with one of
+# 'bioc_experiment--'.
+# 'bioc_annotation--'.
+# 'bioc_software--'. = bioconductor software
+# 'cran--'.
+# which is necessary when a package is in multiple but we don't want to kick all of them.
+
+excluded_packages = []
+inherit(
+    excluded_packages,
+    "3.0",
+    {
         "bioc_experiment--MafDb.ALL.wgs.phase1.release.v3.20101123": "newer in bioconductor-annotation",
         "bioc_experiment--MafDb.ESP6500SI.V2.SSA137.dbSNP138": "newer in bioconductor-annotation",
         "bioc_experiment--phastCons100way.UCSC.hg19": "newer in bioconductor-annotation",
@@ -25,7 +187,7 @@ excluded_packages = {
         "npRmpi": "build is broken with mpi trouble",
         "cudaBayesreg": "build is broken, needs nvcc",
         "permGPU": "build is broken, needs nvcc",
-        "Rcplex": "cplex (c dependency) only shows up later in nixpkgs.",
+        "Rcplex": "cplex (c dependency) only shows up later in nixpkgs than 15.09",
         "RSAP": "misssing sapnwrfc.h",
         "jvmr": "broken build. Wants to talk to ddahl.org. Access /home/dahl during build",
         "rpanel": "build broken, wants DISPLAY?",
@@ -33,7 +195,7 @@ excluded_packages = {
         "rsbml": "libsmbl isn't packagd in nixpkg ",
         "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
         "interactiveDisplayBase": "wants to talk to bioconductor.org during installation",
-        "RcppOctave": "build seems incompatible wit octave version in nixpkgs.",
+        "RcppOctave": "build seems incompatible with octave version in nixpkgs.",
         "SDMTools": "all downstreams fail with  undefined symbol: X",
         "oligoClasses": "requires biocInstaller during installation",
         "UniProt.ws": "wants to talk to uniprot.org",
@@ -52,31 +214,173 @@ excluded_packages = {
         "HilbertVisGUI": "needs OpenCL, not available in nixpkgs 15.09",
         "OpenCL": "needs OpenCL, not available in nixpkgs 15.09",
         # "gWidgetstcltk": "tcl invalid command name 'font'",
-    },
-    ("3.0", "<2014-10-26"): {
-        "bioassayR": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-        "plethy": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-        "cummeRbund": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-        "VariantFiltering": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-    },
-    ("3.0", "<2014-11-07"): {
-        "HSMMSingleCell": "needs VGAM > 0.9.5, that shows up on 11-07",
-    },
-    ("3.0", "<2015-01-11"): {
         "easyRNASeq": "needs LSD>=3.0, which shows up on 2015-01-10",
         "seqplots": "needs shiny.>=0.11.0 which shows up on 2015-02-11",
         "MSGFgui": "needs shiny.>=0.11.0 which shows up on 2015-02-11",
     },
-    ("3.7"): {
+)
+inherit(
+    excluded_packages,
+    ("3.0", "2014-10-26"),
+    {
+        "bioassayR": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
+        "plethy": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
+        "cummeRbund": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
+        "VariantFiltering": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
+        "metaMix": "R install fails with MPI problem",
+    },
+)
+
+inherit(
+    excluded_packages,
+    ("3.0", "2014-10-28"),
+    {
+        "h2o": "tries to download form s3",
+    },
+)
+
+inherit(
+    excluded_packages,
+    ("3.0", "2014-11-07"),
+    {
+        "HSMMSingleCell": "needs VGAM > 0.9.5, that shows up on 11-07",
+    },
+)
+
+inherit(
+    excluded_packages,
+    ("3.0", "2015-01-11"),
+    {
+        "Rsymphony": "can't find SYMPHONY in nixpkgs",
+        "V8": "mismatch between the nixpkgs version and what R wants",
+        "iFes": "nvcc  Unsupported gpu architecture 'compute_10'",
+    },
+    [
+        "easyRNASeq",
+        "seqplots",
+        "MSGFgui",
+    ],  # could enable easyRNAseq on 2015-01-10 already.
+)
+
+
+inherit(
+    excluded_packages,
+    ("3.1"),
+    {
+        "cran--saps": "newer in bioconductor",
+        "cran--muscle": "newer in bioconductor",
+        #  simply missing
+        "affy": "requries BiocInstaller",
+        "bigGP": "build is broken with mpi trouble",
+        "BiocCheck": "requries BiocInstaller",
+        "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
+        "ChIPpeakAnno": "requires BiocInstaller",
+        "cudaBayesreg": "build is broken, needs nvcc",
+        "doMPI": "build is broken with mpi trouble",
+        "h2o": "tries to download form s3",
+        "HierO": "can't find BWidget",
+        "HilbertVisGUI": "needs OpenCL, not available in nixpkgs 15.09",
+        "HiPLARM": "build is broken, and the package never got any updates and was removed in 2017-07-02",
+        "iFes": "nvcc  Unsupported gpu architecture 'compute_10'",
+        "IlluminaHumanMethylation450k.db": "uses 'Defunct' function",
+        "interactiveDisplayBase": "wants to talk to bioconductor.org during installation",
+        "jvmr": "broken build. Wants to talk to ddahl.org. Access /home/dahl during build",
+        "metaMix": "R install fails with MPI problem",
+        "mongolite": "won't find openssl even with pkgs.openssl as dependency",
+        "MSeasyTkGUI": "Needs Tk",
+        "ncdfFlow": "no hdf5.dev in this nixpkgs",
+        "nloptr": "nlopt library is broken in nixpkgs 15.09",
+        "oligoClasses": "requires biocInstaller during installation",
+        "OpenCL": "needs OpenCL, not available in nixpkgs 15.09",
+        "pbdSLAP": "build is broken with mpi trouble",
+        "permGPU": "build is broken, needs nvcc",
+        "pmclust": "build is broken with mpi trouble",
+        "qdap": "build segfaults",
+        "qtpaint": "missing libQtCore.so.4 and was listed as broken in nixpkgs 15.09",
+        "QuasR": "requires BiocInstaller",
+        "Rcplex": "cplex (c dependency) only shows up later in nixpkgs than 15.09",
+        "RcppAPT": "needs APT/Debian system",
+        "RcppOctave": "build seems incompatible with octave version in nixpkgs.",
+        "rgdal": "not compatible with GDAL2 (which is what's in nixpkgs at this point)",
+        "rhdf5": "no hdf5.dev in this nixpkgs",
+        "h5": "no hdf5.dev in this nixpkgs",
+        "Rmosek": "build is broken according to R/default.nix. And changed hash without version change.",
+        "ROracle": "OCI libraries not found",
+        "rpanel": "can't find BWidget",
+        "RQuantLib": "hquantlib ( if that's even the right package) is broken in nixpgks 15.09)",
+        "RSAP": "misssing sapnwrfc.h",
+        "rsbml": "libsmbl isn't packagd in nixpkg ",
+        "Rsymphony": ["pkgconfig", "doxygen", "graphviz", "subversion"],
+        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        "SOD": "build broken without libOpenCL",
+        "spectral.methods": "needs clusterify from Rssa which that package apperantly never had",
+        "SSOAP": "(omegahat / github only?)",
+        "SVGAnnotation": "github only?",
+        "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
+        "XMLRPC": "(omegahat / github only?)",
+        "XMLSchema": "(omegahat / github only?)",
+        "V8": "mismatch between the nixpkgs version and what R wants",
+        "PAA": "requries Rcpp >=0.11.6, which only became available on 2017-05-02",
+        "bamboo": "shows up on CRAN at 2017-05-16",
+        "seqplots": "DT, required by seqplots shows up on CRAN at 2017-06-09",
+        "NetPathMiner": "Needs igraph >= 1.0.0",
+        "BioNet": "Needs igraph >= 1.0.0",
+        "assertive.base": "assertive.base showed up on 2015-07-15",
+        "DT": "dt shows up on 2015-08-01",
+        "clipper": "missing export in igraph. Needs 1.0.0, perhaps?",
+        "NGScopy": "required changepoint version shows up",
+    },
+)
+
+inherit(
+    excluded_packages,
+    ("3.1", "2015-05-02"),
+    {},
+    # {"OpenMx": "configure not found?",},
+    ["PPA"],
+)
+
+inherit(excluded_packages, ("3.1", "2015-05-16"), {}, ["bamboo"])
+inherit(excluded_packages, ("3.1", "2015-06-09"), {}, ["seqplots"])
+inherit(
+    excluded_packages,
+    ("3.1", "2015-07-07"),
+    {"stringi": "Wants to download icudt55l.zip", "iptools": "can't find boost::regex"},
+    [
+        "NetPathMiner",
+        "BioNet",
+        "clipper",
+    ],
+)
+inherit(
+    excluded_packages,
+    ("3.1", "2015-07-15"),
+    {
+        # "iptools": "missing boost::regex which I couldn't find",
+    },
+    ["assertive.base"],
+)
+inherit(excluded_packages, ("3.1", "2015-08-01"), {}, ["DT"])
+inherit(excluded_packages, ("3.1", "2015-10-01"), {}, ["NGScopy"])
+
+
+# inherit
+#
+inherit(
+    excluded_packages,
+    ("3.7"),
+    {
         "iontree": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
         "domainsignatures": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
     },
-    # ("3.13", "<2021-07-01"): [
-    # "ggtree",  # missing ggfun
-    # ],
-}
+)
+excluded_packages = inherit_to_dict(excluded_packages)
+
+# ("3.13", "<2=021-07-01"): [
+# "ggtree",  # missing ggfun
+# ],
 package_patches = {
-    # this is the big gun
+    # this is the big gun, when we need to replace a package *completly*
     # {'version': {'bioc|experiment|annotation': [{'name':..., 'version': ..., 'depends': [...], 'imports': [...], 'needs_compilation': True}]}}
     # "3.0": {
     #     "annotation": [
@@ -110,20 +414,26 @@ package_patches = {
 }
 
 additional_r_dependencies = {
-    # for when stuff is missing...
+    # for when dependencies are missing.
     # we need to use this already at low level,
     # so the graph is complete,
     # not only on export
     "3.0": {
         "annotation": {"gahgu133plus2cdf": ["AnnotationDbi"]},
         "software": {"inSilicoMerging": ["inSilicoDb"]},
-    }
+    },
+    "3.1": {
+        "software": {"inSilicoMerging": ["inSilicoDb"], "ChemmineR": ["gridExtra"]},
+    },
 }
 
 
-native_build_inputs = {  # ie. compile time dependencies
-    # pkgs. get's added automatically if there's no . in the entry.
-    "3.0": {
+native_build_inputs = []  # ie. compile time dependencies
+# pkgs. get's added automatically if there's no . in the entry.
+inherit(
+    native_build_inputs,
+    "3.0",
+    {
         "abn": ["gsl"],
         "adimpro": ["imagemagick"],
         "affyio": ["zlib"],
@@ -132,7 +442,6 @@ native_build_inputs = {  # ie. compile time dependencies
         "BayesSAE": ["gsl"],
         "BayesVarSel": ["gsl"],
         "BayesXsrc": ["readline", "ncurses"],
-        # "bigGP": ["openmpi"],
         "BiocCheck": ["which"],
         "Biostrings": ["zlib"],
         # "BitSeq": ["zlib"],
@@ -140,13 +449,11 @@ native_build_inputs = {  # ie. compile time dependencies
         "BNSP": ["gsl"],
         "cairoDevice": ["gtk2"],
         "Cairo": ["libtiff", "libjpeg", "cairo"],
-        # "Cardinal": ["which"],
         "CARramps": ["pkgs.linuxPackages.nvidia_x11", "liblapack"],
         "chebpol": ["fftw"],
         "ChemmineOB": ["openbabel", "pkgconfig"],
         "cit": ["gsl"],
         "Crossover": ["which"],
-        # "curl": ["curl"],
         "devEMF": ["pkgs.xlibs.libXft"],
         # "DiffBind": ["zlib"],
         "DirichletMultinomial": ["gsl"],
@@ -158,12 +465,10 @@ native_build_inputs = {  # ie. compile time dependencies
         "flowQ": ["imagemagick"],
         "Formula": ["gmp"],
         "geoCount": ["gsl"],
-        # "git2r": ["zlib", "openssl"],
         "GLAD": ["gsl"],
         "glpkAPI": ["gmp", "glpk"],
         "gMCP": ["which"],
         "gmp": ["gmp"],
-        # "graphscan": ["gsl"],
         "gsl": ["gsl"],
         "HiCseg": ["gsl"],
         # "HilbertVisGUI": ["pkgconfig", "opencl-headers"],
@@ -177,8 +482,8 @@ native_build_inputs = {  # ie. compile time dependencies
         "ltsk": ["liblapack", "blas"],
         "mixcat": ["gsl"],
         "MMDiff": ["gsl"],
-        "MotIV": ["openssl", "gsl"],
         "motifStack": ["gsl"],
+        "MotIV": ["openssl", "gsl"],
         "MSGFplus": ["jdk"],
         "mvabund": ["gsl"],
         "mwaved": ["fftw"],
@@ -244,7 +549,6 @@ native_build_inputs = {  # ie. compile time dependencies
             "jdk",
             "libzip",
         ],
-        # "Rlibeemd": ["gsl"],
         "rMAT": ["gsl"],
         # "rmatio": ["zlib"],
         "Rmpfr": ["gmp", "mpfr"],
@@ -298,24 +602,96 @@ native_build_inputs = {  # ie. compile time dependencies
         "sysfonts": ["zlib", "libpng", "freetype"],
         "TAQMNGR": ["zlib"],
         "tiff": ["libtiff"],
-        # "TKF": ["gsl"],
         "tkrplot": ["pkgs.xlibs.libX11"],
         "topicmodels": ["gsl"],
         "udunits2": ["udunits", "expat"],
-        # "V8": ["v8"],
         "VBLPCM": ["gsl"],
         "VBmix": ["gsl", "fftw", "qt4"],
         "vcf2geno": ["zlib"],
         # "WhopGenome": ["zlib"],
         "XBRL": ["zlib", "libxml2"],
-        # "xml2": ["libxml2"],
         "XML": ["libtool", "libxml2", "xmlsec", "libxslt"],
-    }
-}
+    },
+)
+inherit(native_build_inputs, ("3.0", "2014-10-26"), {}, ["vcf2geno"])
+inherit(native_build_inputs, ("3.0", "2014-10-31"), {}, ["STARSEQ"])
+inherit(
+    native_build_inputs,
+    ("3.0", "2015-01-11"),
+    {
+        "curl": ["curl"],
+        "openssl": ["openssl"],
+        "seqinr": ["zlib"],
+        "rbison": ["glpk"],
+    },
+)
 
-build_inputs = {  # run time dependencies
-    # note that in here, it's still 'r packages names', so 'nat.blast', not 'nat_blast'
-    "3.0": {
+inherit(
+    native_build_inputs,
+    "3.1",
+    {
+        "abn": ["gsl"],
+        "bigGP": ["openmpi"],
+        "birte": ["liblapack", "blas"],
+        "Cardinal": ["which"],
+        "dbConnect": ["curl"],
+        "graphscan": ["gsl"],
+        "immunoClust": ["gsl"],
+        "lfe": ["which"],
+        "LowMACA": ["which"],
+        "mongolite": ["openssl"],
+        "PBSddesolve": ["which"],
+        "rDEA": ["glpk"],
+        "Rhtslib": ["zlib"],
+        "Rlibeemd": ["gsl"],
+        "TKF": ["gsl"],
+        "xml2": ["libxml2"],
+        "V8": ["v8"],
+        # "iptools": ["boost"],
+        "git2r": ["zlib", "openssl"],
+        # "OpenMx": ["autoreconfHook"],
+    },
+    ["Rniftilib", "npRmpi"],
+    copy_anyway=True,
+)
+inherit(
+    native_build_inputs,
+    ("3.1", "2015-07-02"),
+    {
+        "PEIP": ["liblapack", "blas"],
+    },
+)
+
+inherit(
+    native_build_inputs,
+    ("3.1", "2015-07-09"),
+    {
+        "PythonInR": ["python"],
+    },
+)
+inherit(
+    native_build_inputs,
+    ("3.1", "2015-10-01"),
+    {
+        "VBmix": ["gsl", "fftw", "qt4", "autoreconfHook", "blas", "liblapack"],
+        "animation": ["which"],
+        # "Rblpapi": ["autoreconfHook"],
+        # "FIACH": ["autoreconfHook"],
+        "bedr": ["which"],
+        # "xml2": ["autoreconfHook"],
+        "curl": ["curl"],
+    },
+)
+
+inherit(native_build_inputs, "3.2", {}, [], copy_anyway=True)
+native_build_inputs = inherit_to_dict(native_build_inputs)
+
+build_inputs = []  # run time dependencies
+# note that in here, it's still 'r packages names', so 'nat.blast', not 'nat_blast'
+inherit(
+    build_inputs,
+    "3.0",
+    {
         # sort -t '=' -k 2
         "adimpro": ["which", "pkgs.xorg.xdpyinfo"],
         "cairoDevice": ["pkgconfig"],
@@ -331,7 +707,6 @@ build_inputs = {  # run time dependencies
         "geoCount": ["pkgconfig"],
         "gmatrix": ["cudatoolkit"],
         "gputools": ["which", "cudatoolkit"],
-        # "gridGraphics": ["which"],
         "kza": ["pkgconfig"],
         "MSGFgui": ["jdk"],
         "mwaved": ["pkgconfig"],
@@ -363,17 +738,51 @@ build_inputs = {  # run time dependencies
         "VBmix": ["pkgconfig"],
         "WideLM": ["cudatoolkit"],
         "XML": ["pkgconfig"],
-    }
-}
+    },
+)
+inherit(
+    build_inputs,
+    "3.1",
+    {
+        "gridGraphics": ["which"],
+    },
+    [],
+    copy_anyway=True,
+)
+inherit(
+    build_inputs,
+    ("3.1", "2015-07-09"),
+    {
+        "PythonInR": ["python"],
+    },
+)
+# inherit build_inputs,"3.2",{}, [],copy_anyway=True)
+build_inputs = inherit_to_dict(build_inputs)
 
-skip_check = {
-    "3.0": [
+
+skip_check = []
+inherit_list(
+    skip_check,
+    "3.0",
+    [
         "Rmpi",  # tries to run MPI processes
         "gmatrix",  # requires CUDA runtime
-        "sprint",
-        "pbdMPI",  # tries to run MPI processes  # tries to run MPI processes
-    ]
-}
+        "sprint",  # tries to run MPI processes
+        "pbdMPI",  # tries to run MPI processes
+    ],
+)
+inherit_list(
+    skip_check,
+    ("3.0", "2014-10-26"),
+    [
+        "metaMix",
+        "bigGP",
+    ],
+)  # tries to run MPI processes
+inherit_list(skip_check, "3.1", ["pbdMPI"], [], copy_anyway=True)
+inherit_list(skip_check, ("3.1", "2015-10-01"), ["regRSM"], [], copy_anyway=True)
+skip_check = inherit_to_dict(skip_check)
+# inherit_list( skip_check,"3.2", [], [], copy_anyway=True)
 
 
 needs_x = set(  # let's presume they never go from 'need X' no 'not need X'
@@ -408,281 +817,100 @@ needs_x = set(  # let's presume they never go from 'need X' no 'not need X'
     ]
 )
 
-set(
-    [
-        "accrual",
-        "Actigraphy",
-        "ade4TkGUI",
-        "adehabitat",
-        "analogue",
-        "analogueExtra",
-        "AnalyzeFMRI",
-        "AnnotLists",
-        "AnthropMMD",
-        "aplpack",
-        "aqfig",
-        "arf3DS4",
-        "asbio",
-        "AtelieR",
-        "BAT",
-        "bayesDem",
-        "BCA",
-        "BEQI2",
-        "betapart",
-        "betaper",
-        "BHMSMAfMRI",
-        "BiodiversityR",
-        "BioGeoBEARS",
-        "bio_infer",
-        "bipartite",
-        "biplotbootGUI",
-        "blender",
-        "cairoDevice",
-        "CCTpack",
-        "cncaGUI",
-        "cocorresp",
-        "CommunityCorrelogram",
-        "confidence",
-        "constrainedKriging",
-        "ConvergenceConcepts",
-        "cpa",
-        "DALY",
-        "dave",
-        "debug",
-        "Deducer",
-        "DeducerExtras",
-        "DeducerPlugInExample",
-        "DeducerPlugInScaling",
-        "DeducerSpatial",
-        "DeducerSurvival",
-        "DeducerText",
-        "Demerelate",
-        "DescTools",
-        "detrendeR",
-        "dgmb",
-        "DivMelt",
-        "dpa",
-        "DSpat",
-        "dynamicGraph",
-        "dynBiplotGUI",
-        "EasyqpcR",
-        "EcoVirtual",
-        "ENiRG",
-        "EnQuireR",
-        "eVenn",
-        "exactLoglinTest",
-        "FAiR",
-        "fat2Lpoly",
-        "fbati",
-        "FD",
-        "feature",
-        "FeedbackTS",
-        "FFD",
-        "fgui",
-        "fisheyeR",
-        "fit4NM",
-        "forams",
-        "forensim",
-        "FreeSortR",
-        "fscaret",
-        "fSRM",
-        "gcmr",
-        "Geneland",
-        "GeoGenetix",
-        "geomorph",
-        "geoR",
-        "geoRglm",
-        "georob",
-        "GeoXp",
-        "GGEBiplotGUI",
-        "gnm",
-        "GPCSIV",
-        "GrammR",
-        "GrapheR",
-        "GroupSeq",
-        "gsubfn",
-        "GUniFrac",
-        "gWidgets2RGtk2",
-        "gWidgets2tcltk",
-        "gWidgetsRGtk2",
-        "gWidgetstcltk",
-        "HH",
-        "HiveR",
-        "HomoPolymer",
-        "iBUGS",
-        "ic50",
-        "iDynoR",
-        "in2extRemes",
-        "iplots",
-        "isopam",
-        "IsotopeR",
-        "JGR",
-        "KappaGUI",
-        "lefse",
-        "likeLTD",
-        "loe",
-        "logmult",
-        "LS2Wstat",
-        "MAR1",
-        "MareyMap",
-        "memgene",
-        "MergeGUI",
-        "metacom",
-        "Meth27QC",
-        "MetSizeR",
-        "MicroStrategyR",
-        "MigClim",
-        "migui",
-        "miniGUI",
-        "MissingDataGUI",
-        "mixsep",
-        "mlDNA",
-        "MplusAutomation",
-        "mpmcorrelogram",
-        "mritc",
-        "MTurkR",
-        "multgee",
-        "multibiplotGUI",
-        "mutossGUI",
-        "nodiv",
-        "OligoSpecificitySystem",
-        "onemap",
-        "OpenRepGrid",
-        "palaeoSig",
-        "paleoMAS",
-        "pbatR",
-        "PBSadmb",
-        "PBSmodelling",
-        "PCPS",
-        "pez",
-        "phylotools",
-        "picante",
-        "PKgraph",
-        "PKmodelFinder",
-        "playwith",
-        "plotSEMM",
-        "plsRbeta",
-        "plsRglm",
-        "pmg",
-        "PoMoS",
-        "PopGenReport",
-        "poppr",
-        "powerpkg",
-        "PredictABEL",
-        "prefmod",
-        "PrevMap",
-        "ProbForecastGOP",
-        "QCAGUI",
-        "qtbase",
-        "qtpaint",
-        "qtutils",
-        "R2STATS",
-        "r4ss",
-        "RandomFields",
-        "rareNMtests",
-        "rAverage",
-        "Rcmdr",
-        "RcmdrPlugin_BCA",
-        "RcmdrPlugin_coin",
-        "RcmdrPlugin_depthTools",
-        "RcmdrPlugin_DoE",
-        "RcmdrPlugin_doex",
-        "RcmdrPlugin_EACSPIR",
-        "RcmdrPlugin_EBM",
-        "RcmdrPlugin_EcoVirtual",
-        "RcmdrPlugin_epack",
-        "RcmdrPlugin_EZR",
-        "RcmdrPlugin_FactoMineR",
-        "RcmdrPlugin_HH",
-        "RcmdrPlugin_IPSUR",
-        "RcmdrPlugin_KMggplot2",
-        "RcmdrPlugin_lfstat",
-        "RcmdrPlugin_MA",
-        "RcmdrPlugin_mosaic",
-        "RcmdrPlugin_MPAStats",
-        "RcmdrPlugin_orloca",
-        "RcmdrPlugin_plotByGroup",
-        "RcmdrPlugin_pointG",
-        "RcmdrPlugin_qual",
-        "RcmdrPlugin_ROC",
-        "RcmdrPlugin_sampling",
-        "RcmdrPlugin_SCDA",
-        "RcmdrPlugin_SLC",
-        "RcmdrPlugin_SM",
-        "RcmdrPlugin_sos",
-        "RcmdrPlugin_StatisticalURV",
-        "RcmdrPlugin_steepness",
-        "RcmdrPlugin_survival",
-        "RcmdrPlugin_TeachingDemos",
-        "RcmdrPlugin_temis",
-        "RcmdrPlugin_UCA",
-        "recluster",
-        "relax",
-        "relimp",
-        "RenextGUI",
-        "reportRx",
-        "reshapeGUI",
-        "rgl",
-        "RHRV",
-        "rich",
-        "ringscale",
-        "rioja",
-        "ripa",
-        "rite",
-        "rnbn",
-        "RnavGraph",
-        "RNCEP",
-        "RQDA",
-        "RSDA",
-        "rsgcc",
-        "RSurvey",
-        "RunuranGUI",
-        "sdcMicroGUI",
-        "SeqGrapheR",
-        "sharpshootR",
-        "simba",
-        "Simile",
-        "SimpleTable",
-        "SOLOMON",
-        "soundecology",
-        "SPACECAP",
-        "spacodiR",
-        "spatsurv",
-        "sqldf",
-        "SRRS",
-        "SSDforR",
-        "statcheck",
-        "StatDA",
-        "STEPCAM",
-        "stosim",
-        "strvalidator",
-        "stylo",
-        "svDialogstcltk",
-        "svIDE",
-        "svSocket",
-        "svWidgets",
-        "SYNCSA",
-        "SyNet",
-        "tcltk2",
-        "TDMR",
-        "TED",
-        "TestScorer",
-        "TIMP",
-        "titan",
-        "tkrgl",
-        "tkrplot",
-        "tmap",
-        "tspmeta",
-        "TTAinterfaceTrendAnalysis",
-        "twiddler",
-        "vcdExtra",
-        "VecStatGraphs3D",
-        "vegan",
-        "vegan3d",
-        "vegclust",
-        "VIMGUI",
-        "WMCapacity",
-        "x12GUI",
-        "xergm",
-    ]
+patches = []
+inherit(
+    patches,
+    "3.0",
+    {
+        "qtbase": ["./../patches/qtbase.patch"],
+    },
 )
+
+inherit(
+    patches,
+    ("3.0", "2015-01-11"),
+    {
+        "RMySQL": ["./../patches/RMySQL.patch"],
+    },
+)
+
+
+inherit(
+    patches,
+    "3.1",
+    {
+        "qtbase": ["../../patches/qtbase.patch"],
+        "RMySQL": ["./../patches/RMySQL.patch"],
+    },
+)
+inherit(
+    patches,
+    ("3.1", "2015-07-07"),
+    {
+        "qtbase": ["./../patches/qtbase_1.0.9.patch"],
+    },  # bc 3.1
+)
+# inherit(
+# patches,
+# ("3.1", "2015-10-01"),
+# {},
+# [],
+# )
+
+patches = inherit_to_dict(patches)
+
+patches_by_package_version = {}
+
+hooks = []
+inherit(
+    hooks,
+    ("3.1", "2015-10-01"),
+    {"curl": {"preConfigure": ["patchShebangs --build configure\n"]}},
+)
+hooks = inherit_to_dict(hooks)
+
+# these get added in addition to the release date / archive date snapshots
+# because sometimes the snapshots at release are simply missing packages.
+# the value is why we added them (and get's into the README.md of the downstream repo).
+# extra_snapshots = {
+#     "3.0": {
+#         "2014-10-26": "RSQLITE 1.0.0 needed by bioassayR started being available on this date."
+#     },
+#     "3.1": {
+#         "2015-05-02": "* Rcpp 0.11.6 required by PAA",
+#         "2015-05-16": "* bamboo",
+#         "2015-07-07": "* igraph 1.0.1 for NetPathMiner, BioNet",
+#         "2015-07-15": "* assertive.base is required by OmicsMarkeR, shows up on 2015-07-15",
+#         "2015-06-09": "* DT, required by seqplots shows up on '2015-06-09'",
+#         "2015-10-01": "* changepoint 2.1.1 for NGScopy shows up",
+#     },
+#     "3.2": {"2016-01-10": "ggrepel was added to CRAN 2016-01-10"},
+#     "3.5": {"2017-06-10": "dbplyr was added to CRAN 2017-06-09"},
+# }
+
+extra_snapshots = {}
+for adict in (
+    flake_info,
+    excluded_packages,
+    comments,
+    package_patches,
+    additional_r_dependencies,
+    native_build_inputs,
+    build_inputs,
+    skip_check,
+    patches,
+    hooks,
+):
+    if not isinstance(adict, dict):
+        raise TypeError(adict)
+    for key in adict.keys():
+        if isinstance(key, tuple):
+            if len(key) != 2:
+                raise ValueError("Invalid spec", key)
+            bc_version, date = key
+            parse_date(date)
+            if not bc_version in extra_snapshots:
+                extra_snapshots[bc_version] = set()
+            extra_snapshots[bc_version].add(date)
+
+extra_snapshots = {k: sorted(v) for (k, v) in extra_snapshots.items()}

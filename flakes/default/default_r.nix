@@ -15,7 +15,8 @@ let
     args:
     lib.makeOverridable ({ name, version, sha256, depends ? [ ], doCheck ? true
       , requireX ? false, broken ? false, hydraPlatforms ? R.meta.hydraPlatforms
-      , nativeBuildInputs ? [ ], buildInputs ? [ ], patches ? [ ], url ? false }:
+      , nativeBuildInputs ? [ ], buildInputs ? [ ], patches ? [ ], url ? false
+      , hooks ? { } }:
       buildRPackage {
         name = name;
         version = version;
@@ -32,7 +33,7 @@ let
         meta.platforms = R.meta.platforms;
         meta.hydraPlatforms = hydraPlatforms;
         meta.broken = broken;
-      });
+      } // hooks);
 
   # Templates for generating Bioconductor and CRAN packages
   # from the name, version, sha256, and optional per-package arguments above

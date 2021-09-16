@@ -129,36 +129,6 @@ class BioConductorTrack:
         raise KeyError(date)
 
 
-# packages that we kick out of the index
-# per bioconductor release, and sometimes per date.
-# the world ain't perfect 🤷
-# note that we can kick from specific lists by prefixing with one of
-# 'bioc_experiment--'.
-# 'bioc_annotation--'.
-# 'bioc_software--'. = bioconductor software
-# 'cran--'.
-# which is necessary when a package is in multiple but we don't want to kick all of them.
-
-
-# at times, the packages.gz is missing dependencies...
-# these get added in addition to the release date / archive date snapshots
-# because sometimes the snapshots at release are simply missing packages.
-# the value is why we added them.
-extra_snapshots = {
-    "3.0": {
-        "2014-10-26": "RSQLITE 1.0.0 needed by bioassayR started being available on this date."
-    },
-    "3.1": {
-        "2015-08-01": """
- * DT, required by seqplots shows up on '2015-06-09', but we strive to have only one date.
- * assertive.base is required by OmicsMarkeR
-"""
-    },
-    "3.2": {"2016-01-10": "ggrepel was added to CRAN 2016-01-10"},
-    "3.5": {"2017-06-10": "dbplyr was added to CRAN 2017-06-09"},
-}
-
-
 @functools.total_ordering
 class BioconductorRelease:
     """Data fetcher for one bioconductor release"""
@@ -383,7 +353,9 @@ class BioconductorRelease:
                     archive_date, available
                 )
                 result.add((archive_date, snapshot_date))
-        for str_date in extra_snapshots.get(self.str_version, {}):
+        for str_date in bioconductor_overrides.extra_snapshots.get(
+            self.str_version, {}
+        ):
             d = datetime.datetime.strptime(str_date, "%Y-%m-%d").date()
             # we use these mostly in non-archived Bioconductor versions,
             # so it's safe to set archive date = snapshot date.
@@ -518,30 +490,69 @@ class BioconductorRelease:
 
         return result
 
-    def get_excluded_packages_at_date(self, date):
+    def _match_override_keys(
+        self, input_dict, version, date, debug=False, none_ok=False, default=dict
+    ):
         key = f"{date:%Y-%m-%d}"
-        if (self.str_version, key) in bioconductor_overrides.excluded_packages:
-            return bioconductor_overrides.excluded_packages[(self.str_version, key)]
+        if debug:
+            print("looking for", version, key)
+        if (version, key) in input_dict:
+            if debug:
+                print("exact match")
+            return input_dict[(version, key)]
         else:
-            # consider all <= date as relevant
-            res = {}
-            for bl_key in bioconductor_overrides.excluded_packages:
-                if (
-                    isinstance(bl_key, tuple)
-                    and (bl_key[0] == self.str_version)
-                    and (bl_key[1][0] == "<")
-                    and (key <= bl_key[1][1:])
-                ):
-                    print("applying", bl_key)
-                    res.update(bioconductor_overrides.excluded_packages[bl_key])
-            return res
+            matching = []
+            for k in input_dict:
+                if isinstance(k, tuple):
+                    (kversion, kdate) = k
+                    if kversion == version:
+                        if kdate < key:
+                            matching.append(kdate)
+            matching = sorted(matching)  # should be unnecessary
+            if matching:
+                if debug:
+                    print("using latest date: ", matching[-1])
+                return input_dict[version, matching[-1]]
 
-    def patch_native_dependencies(self, graph, all_packages, excluded):
+        if version in input_dict:
+            if debug:
+                print("falling back to version match")
+            return input_dict[version]
+        else:
+            if none_ok:
+                return default()
+            else:
+                raise KeyError(version, date)
+
+    def get_excluded_packages_at_date(self, date):
+        return self._match_override_keys(
+            bioconductor_overrides.excluded_packages, self.str_version, date
+        )
+
+    def get_flake_info_at_date(self, date):
+        return self._match_override_keys(
+            bioconductor_overrides.flake_info, self.str_version, date
+        )
+
+    def get_comment_at_date(self, date):
+        return self._match_override_keys(
+            bioconductor_overrides.comments,
+            self.str_version,
+            date,
+            lambda: "",
+            lambda x, y: x + y,
+        )
+
+    def patch_native_dependencies(self, graph, all_packages, excluded, date):
         # this is here because it's bioc version dependent
         # but it also handles cran packages
         errors = []
         for what in ["native_build_inputs", "build_inputs"]:
-            nbi = getattr(bioconductor_overrides, what).get(self.str_version, [])
+            nbi = self._match_override_keys(
+                getattr(bioconductor_overrides, what),
+                self.str_version,
+                date,
+            )
             for pkg_name, deps in nbi.items():
                 if not pkg_name in all_packages and not pkg_name in excluded:
                     errors.append(
@@ -549,16 +560,39 @@ class BioconductorRelease:
                     )
                     continue
                 all_packages[pkg_name][what] = [
-                    f"pkgs.{n}" if not "." in n else n for n in deps
+                    f"pkgs.{n}" if not "." in n and (n != "breakpointHook") else n
+                    for n in deps
                 ]
-        for what in [
-            "skip_check",
-        ]:
-            for pkg_name in getattr(bioconductor_overrides, what).get(
-                self.str_version, []
-            ):
-                if pkg_name in all_packages:
-                    all_packages[pkg_name][what] = True
+        skip = self._match_override_keys(
+            bioconductor_overrides.skip_check,
+            self.str_version,
+            date,
+            lambda: [],
+            lambda x, y: x.extend(y),
+        )
+        for pkg_name in skip:
+            if pkg_name in all_packages:
+                all_packages[pkg_name]["skip_check"] = True
+
+        for what in ["patches", "hooks"]:
+            for pkg_name, values in self._match_override_keys(
+                getattr(bioconductor_overrides, what),
+                self.str_version,
+                date,
+                none_ok=True,
+            ).items():
+                if not pkg_name in all_packages and not pkg_name in excluded:
+                    errors.append(
+                        f"package with patches but not in graph or excluded: {pkg_name}"
+                    )
+                all_packages[pkg_name][what] = values
+
+        for pkg_name, info in all_packages.items():
+            key = pkg_name, info["version"]
+            if key in bioconductor_overrides.patches_by_package_version:
+                all_packages[pkg_name][
+                    "patches"
+                ] = bioconductor_overrides.patches_by_package_version[key]
 
         if errors:
             raise ValueError("\n".join(errors))
@@ -572,10 +606,14 @@ class BioconductorRelease:
         needs_x = set(bioconductor_overrides.needs_x.copy())
         also_needs_x = []
         for pkg_name, info in all_packages.items():
-            if needs_x.intersection(info["suggests"]) or needs_x.intersection(
-                info["depends"]  # which is depends + linking_to + imports
-            ):
-                also_needs_x.append(pkg_name)
+            try:
+                if needs_x.intersection(info["suggests"]) or needs_x.intersection(
+                    info["depends"]  # which is depends + linking_to + imports
+                ):
+                    also_needs_x.append(pkg_name)
+            except KeyError:
+                print(info)
+                raise
 
         needs_x.update(also_needs_x)
         for pkg_name in needs_x:

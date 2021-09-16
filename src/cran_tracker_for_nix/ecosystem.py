@@ -1,4 +1,5 @@
 import pypipegraph2 as ppg2
+import sys
 import collections
 import shutil
 import re
@@ -9,11 +10,12 @@ from pathlib import Path
 import subprocess
 import networkx
 from networkx.algorithms.dag import descendants
+from loguru import logger
 from .bioconductor_track import BioConductorTrack
 from .cran_track import CranTrack
 from .r_track import RTracker
 from .common import store_path, write_json, format_date, flake_source_path, temp_path
-from . import bioconductor_track
+from . import bioconductor_track, bioconductor_overrides
 
 
 class REcosystem:
@@ -25,6 +27,7 @@ class REcosystem:
         self.r_track = RTracker()
         self.filter_to_releases = filter_to_releases
         self._sha_cache = {}
+        self._url_cache = {}
 
     def update(self):
         """query everything we don't have yet."""
@@ -66,26 +69,30 @@ class REcosystem:
     def dump(self, archive_date, snapshot_date, output_path):
         """Dump a json with all the info we need to build packages from a given date"""
 
+        print("using archive date", archive_date)
         bioc_version = self.bc.date_to_version(archive_date)
         ct = CranTrack()
         ct.snapshot_dates = [snapshot_date]
         print("using bioc", bioc_version)
-        r_version = self.bc.get_R_version_including_minor(
-            bioc_version, archive_date, self.r_track
-        )
-        print("r_version", r_version)
-        nixpkgs_info = self.r_track.decide_nixpkgs_rev_for_R_version(
-            r_version, archive_date
-        )
-        print("using nixpkgs", nixpkgs_info["commit"], "dated", nixpkgs_info["date"])
+        # r_version = self.bc.get_R_version_including_minor(
+        # bioc_version, archive_date, self.r_track
+        # )
+
         bioc_release = self.bc.get_release(bioc_version)
-        print("using archive date", archive_date)
+        flake_info = bioc_release.get_flake_info_at_date(archive_date)
+        r_version = flake_info["r_version"]
+        print("r_version", r_version)
         print("using snapshot date", snapshot_date)
         header = {
-            "R_version": r_version,
+            "Bioconductor": bioc_release.str_version,
+            "R": r_version,
             "archive_date": archive_date.strftime("%Y-%m-%d"),
             "snapshot_date": snapshot_date.strftime("%Y-%m-%d"),
+            "nixpkgs": flake_info["nixpkgs.url"],
         }
+        comment = bioc_release.get_comment_at_date(archive_date)
+        if comment:
+            header["comment"] = comment
         cran_packages = ct.latest_packages_at_date(snapshot_date)
         bioc_experiment_packages = bioc_release.get_packages("experiment", archive_date)
         bioc_annotation_packages = bioc_release.get_packages("annotation", archive_date)
@@ -174,24 +181,19 @@ class REcosystem:
                     excluded_packages_notes.append("no replacement found")
                     continue
                 excluded_packages_notes.append(
-                    f"replaced {replacement['version']} with {replacement['snapshot']} because of CRAN availability"
+                    f"replaced missing {m}  with {replacement['version']} from snapshot {replacement['snapshot']} because of CRAN availability"
                 )
-                all_packages[m] = {
-                    "name": m,
-                    "version": replacement["version"],
-                    "depends": sorted(
-                        set(
-                            replacement["imports"]
-                            + replacement["depends"]
-                            + replacement["linking_to"]
-                        )
-                    ),
-                    "sha256": Path(
-                        f"data/cran/sha256/{m}_{replacement['version']}.sha256"
-                    ).read_text(),
-                    "snapshot": replacement["snapshot"],
-                    "source": "cran",
-                }
+                all_packages.update(
+                    self.map_packages(
+                        {m: replacement},
+                        "cran",
+                        Path("data/cran/sha256/"),
+                        bl,
+                        None,
+                    )
+                )
+                all_packages[m]["snapshot"] = replacement["snapshot"]
+
                 for d in all_packages[m]["depends"]:
                     graph.add_edge(d, m)
         for name in to_remove:
@@ -213,7 +215,9 @@ class REcosystem:
             histo[name[0].lower()] += 1
         print("most common package start letters", histo.most_common())
 
-        bioc_release.patch_native_dependencies(graph, all_packages, were_excluded)
+        bioc_release.patch_native_dependencies(
+            graph, all_packages, were_excluded, archive_date
+        )
 
         all_packages = {
             k: all_packages[k] for k in sorted(graph.nodes)
@@ -224,25 +228,24 @@ class REcosystem:
         }
         self.clear_output(output_path)
 
-        self.fill_flake(output_path, bioc_version, archive_date)
+        self.fill_flake(output_path, bioc_release, archive_date)
 
         (output_path / "generated").mkdir(exist_ok=True)
         (output_path / "excluded_packages.txt").write_text(
             "\n".join(excluded_packages_notes)
         )
-        self.fill_flake(output_path, bioc_version, archive_date)
 
         readme_text = (output_path / "README.md").read_text()
-        readme_text += "# In This commit\n\n"
+        readme_text += "# In this commit\n\n"
         for k, v in sorted(header.items()):
             readme_text += f"  * {k}: {v}\n"
         readme_text += "\n"
 
-        date_notes = bioconductor_track.extra_snapshots.get(
-            ".".join(bioc_version), {}
-        ).get(format_date(archive_date))
-        if date_notes:
-            readme_text += "# Notes on this revision:\n\n" + date_notes.strip() + "\n\n"
+        # date_notes = bioconductor_overrides.extra_snapshots.get(
+        # ".".join(bioc_version), {}
+        # ).get(format_date(archive_date))
+        # if date_notes:
+        # readme_text += "# Notes on this revision:\n\n" + date_notes.strip() + "\n\n"
         (output_path / "README.md").write_text(readme_text)
 
         self.dump_cran_packages(
@@ -284,7 +287,7 @@ class REcosystem:
         self.assert_r_version(output_path, r_version)
 
         disjoint_package_sets = self.build_disjoint_package_sets(all_packages)
-        test_file = Path(temp_path / "packages_tested")
+        test_file = Path(temp_path / ("packages_tested" + format_date(archive_date)))
         if test_file.exists():
             offset = int(test_file.read_text())
         else:
@@ -292,7 +295,7 @@ class REcosystem:
         for ii, package_set in enumerate(disjoint_package_sets):
             if ii >= offset:
                 print(f"testing package set {ii+1}/{len(disjoint_package_sets)}")
-                self.test_package_set_build(output_path, package_set)
+                self.test_package_set_build(output_path, package_set, archive_date)
                 test_file.write_text(str(ii + 1))
 
         test_file.unlink()
@@ -306,7 +309,7 @@ class REcosystem:
                     "R": r_version,
                     "archive_date": format_date(archive_date),
                     "snapshot_date": format_date(snapshot_date),
-                    "nixpkgs": nixpkgs_info["commit"],
+                    "nixpkgs": flake_info["nixpkgs.url"],
                 }
             ),
         )
@@ -337,9 +340,12 @@ class REcosystem:
                 "depends": sorted(set(v["imports"] + v["depends"] + v["linking_to"])),
                 "suggests": sorted(set(v["suggests"])),
                 "sha256": self.get_sha(sha_path / f"{name}_{v['version']}.sha256"),
+                "url": self.get_url(sha_path / f"{name}_{v['version']}.url"),
                 "source": source,
                 "needs_compilation": v["needs_compilation"],
             }
+            if "patches" in v:
+                res[name]["patches"] = v["patches"]
             res[name].update(defaults)
             if manual_url_overrides and (name, v["version"]) in manual_url_overrides:
                 res[name]["url"] = manual_url_overrides[(name, v["version"])]
@@ -356,13 +362,51 @@ class REcosystem:
                 else:
                     fn.unlink()
 
-    def fill_flake(self, output_path, bioc_version, archive_date):
-        source_path = flake_source_path / ".".join(bioc_version)
+    def fill_flake(self, output_path, bioc_release, archive_date):
+        source_path = flake_source_path / "default"
         if not source_path.exists():
             raise ValueError("No flake source found")
         shutil.copytree(source_path, output_path, dirs_exist_ok=True)
+        input = (output_path / "flake.nix").read_text()
+        flake_info = bioc_release.get_flake_info_at_date(archive_date)
+        print(flake_info)
+        patches = flake_info.get("patches", [])
+        patches = " ".join(patches)
+        output = (
+            input.replace(
+                "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
+                flake_info["nixpkgs.url"],
+            )
+            .replace("3.1.3", flake_info["r_version"])
+            .replace(
+                "04kk6wd55bi0f0qsp98ckjxh95q2990vkgq4j83kiajvjciq7s87",
+                flake_info.get(
+                    "r_tar_gz_sha256",
+                    "0000000000000000000000000000000000000000000000000000",
+                ),
+            )
+            .replace(
+                "patches = []; # R_patches-generated",
+                "patches = [" + patches + "]; # R_patches-generated",
+            )
+        )
+        (output_path / "flake.nix").write_text(output)
 
     def dump_cran_packages(self, cran_packages, snapshot_date, header, output_path):
+        def extract_snapshot_from_url(name, version, url):
+            matches = re.findall(
+                r"(\d{4}-\d{2}-\d{2})/src/contrib/"
+                + name
+                + "_"
+                + version
+                + r"\.tar\.gz",
+                url,
+            )
+            if matches:
+                return matches[0]
+            else:
+                return None
+
         # snapshot_date = format_date(snapshot_date)
         with open(output_path, "w") as op:
             op.write("# generated by CranTrackForNix\n")
@@ -371,21 +415,45 @@ class REcosystem:
                     ("# " + x for x in json.dumps(header, indent=2).strip().split("\n"))
                 )
             )
-            op.write("\n{ self, derive, pkgs }:\n")
-            op.write(f'let derive2 = derive {{ snapshot = "{snapshot_date}"; }};\n')
+            op.write("\n{ self, derive, pkgs, breakpointHook }:\n")
+            # we use the most common snapshot to save some byte here
+            snapshot_counts = collections.Counter()
+            snapshot_counts.update(
+                (
+                    extract_snapshot_from_url(
+                        info["name"], info["version"], info["url"]
+                    )
+                    for info in cran_packages.values()
+                )
+            )
+            if None in snapshot_counts:
+                del snapshot_counts[None]
+            most_common_snapshot = snapshot_counts.most_common(1)[0][0]
+            op.write(
+                f'let derive2 = derive {{ snapshot = "{most_common_snapshot}"; }};\n'
+            )
             op.write("in with self; {\n")
             for name, info in sorted(cran_packages.items()):
-                if not ("snapshot" in info):
-                    raise KeyError("missing snapshot", name, info)
+                # if not ("snapshot" in info):
+                # raise KeyError("missing snapshot", name, info)  # will have rissen in count
                 if not isinstance(info["snapshot"], datetime.date):
                     raise ValueError(type(info["snapshot"]), type(snapshot_date), name)
                 safe_name = name.replace(".", "_")
-                if info["snapshot"] == snapshot_date:
-                    op.write(f" {safe_name} = derive2")
+                # we want to use the same url we retrieved the sha256 from.
+                # for cran at one time apparently rebuild some packages
+                # same content, different build date -> different tar.gz
+                # so we can't fall back to Archive.
+                if ("/" + most_common_snapshot + "/") in info["url"]:
+                    op.write(f" {safe_name} = derive2 ")
                 else:
-                    op.write(
-                        f' {safe_name} = derive {{snapshot = "{info["snapshot"]}";}}'
+                    matches = extract_snapshot_from_url(
+                        info["name"], info["version"], info["url"]
                     )
+                    if matches:
+                        op.write(f' {safe_name} = derive {{snapshot = "{matches}";}}')
+                    else:
+                        op.write(f' {safe_name} = derive {{url = "{info["url"]};}}' "")
+
                 self._write_package(name, info, op)
             op.write("}\n")
 
@@ -400,6 +468,7 @@ class REcosystem:
         for (key, arg) in [
             ("native_build_inputs", "nativeBuildInputs"),
             ("build_inputs", "buildInputs"),
+            ("patches", "patches"),
         ]:
             if key in info:
                 args.append(f"{arg} = [" + " ".join(sorted(info[key])) + "]")
@@ -407,7 +476,6 @@ class REcosystem:
             args.append(f"requireX=true")
         if info.get("skip_check", False):
             args.append(f"doCheck=false")
-
         op.write("{ " + " ".join((x + ";" for x in args)) + "};\n")
 
     def dump_bioc_packages(self, packages, bioc_version, header, output_path):
@@ -419,7 +487,7 @@ class REcosystem:
                     ("# " + x for x in json.dumps(header, indent=2).strip().split("\n"))
                 )
             )
-            op.write("\n{ self, derive, pkgs }:\n")
+            op.write("\n{ self, derive, pkgs, breakpointHook }:\n")
             op.write(f'let derive2 = derive {{ biocVersion = "{bioc_version}"; }};\n')
             op.write("in with self; {\n")
             for name, info in sorted(packages.items()):
@@ -438,7 +506,7 @@ class REcosystem:
                 "--max-jobs",
                 "auto",
                 "--cores",
-                "2",
+                "4",  # it's pretty bad at using the cores either way, so let's oversubscribe ab it...
                 "--keep-going",
             ],
             cwd=output_path,
@@ -452,19 +520,26 @@ class REcosystem:
         actual = re.findall("R version ([^ ]+)", raw)[0]
         assert r_version == actual
 
-    def test_package_set_build(self, output_path, packages):
-        temp_flake_path = temp_path / "test_flake"
+    def test_package_set_build(self, output_path, packages, archive_date):
+        temp_flake_path = temp_path / "test_flake" / format_date(archive_date)
         if temp_flake_path.exists():
             shutil.rmtree(temp_flake_path)
         temp_flake_path.mkdir()
         subprocess.check_call(["git", "init", "."], cwd=temp_flake_path)
+        path = str(
+            (
+                Path(__file__).parent.parent.parent.parent / "r_ecosystem_track"
+            ).absolute()
+        )
         (temp_flake_path / "flake.nix").write_text(
             """
 {
   description = "test flake to check package build";
 
   inputs = rec {
-    r_flake.url = "path:../../../r_ecosystem_track/";
+    r_flake.url = "path:"""
+            + path
+            + """";
 
   };
 
@@ -491,6 +566,15 @@ class REcosystem:
             self._sha_cache[fn] = Path(fn).read_text()
         return self._sha_cache[fn]
 
+    def get_url(self, fn):
+        fn = Path(fn)
+        if not fn in self._url_cache:
+            if fn.exists():
+                self._url_cache[fn] = fn.read_text()
+            else:
+                self._url_cache[fn] = None
+        return self._url_cache[fn]
+
     def verify_package_tree(self, packages, complain):
         """Verify that there are no missing dependencies in the package DAG"""
         ok = True
@@ -510,7 +594,18 @@ class REcosystem:
         """
         res = set()
         for bioc_release in self.bcvs.values():
-            res.update(bioc_release.get_cran_dates(self.ct))
+            dates = bioc_release.get_cran_dates(
+                self.ct
+            )  # that's a set of (archive_date, snapshot_date)
+            start = bioc_release.release_info.start_date
+            end = bioc_release.release_info.end_date
+            invalid_dates = [x[0] for x in dates if not (start <= x[0] < end)]
+            if invalid_dates:
+                raise ValueError(
+                    f"Bioconducter {bioc_release.version} cran dates outside of start/end date ({bioc_release.release_info}): {invalid_dates}"
+                )
+            # print("bioc_release.version", bioc_release.version, dates)
+            res.update(dates)
         return sorted(res)
 
     def build_disjoint_package_sets(self, all_packages):
@@ -525,10 +620,11 @@ class REcosystem:
         return sorted(networkx.connected_components(g), key=len)
 
 
+@ppg2.util.pretty_log_errors
 def main():
     """Collect the ecosystem information (in data/),
     and dump it, per bioconductor-change-day
-    to a git repo in ../r_ecosystem_track/
+    to a git repo in ./r_ecosystem_track/
     (one commit per day).
 
     We keep track of what's been dumped in dumped/.
@@ -563,18 +659,32 @@ def main():
     already_dumped = [
         fn.name for fn in dump_track_dir.glob("*") if not fn.name.startswith("updated")
     ]
-    for archive_date, snapshot_date in cran_dates:
-        if not archive_date.strftime("%Y-%m-%d") in already_dumped:
-            print("dumping", archive_date)
-            bc_version = r.dump(
-                archive_date, snapshot_date, Path("../r_ecosystem_track")
-            )
-            break
+    if len(sys.argv) <= 1:
+        for archive_date, snapshot_date in cran_dates:
+            if not format_date(archive_date) in already_dumped:
+                print("dumping", archive_date)
+                bc_version = r.dump(
+                    archive_date, snapshot_date, Path("../r_ecosystem_track")
+                )
+                Path(dump_track_dir / (format_date(archive_date))).write_text("")
 
-    commit(add_paths=["dumped", "data"], message="autocommit data update & data after update")
+        commit(
+            add_paths=["dumped", "data"],
+            message="autocommit data update & data after update",
+        )
+    else:
+        query_date = sys.argv[1]
+        output_path = Path("../r_ecosystem_track_" + query_date)
+        for archive_date, snapshot_date in cran_dates:
+            if archive_date == parse_date(query_date):
+                output_path.mkdir(exist_ok=True)
+                bc_version = r.dump(archive_date, snapshot_date, Path(output_path))
+                break
+        else:
+            raise KeyError("Not found")
 
 
-#    r.dump(datetime.date(year=2018, month=1, day=15), Path("../r_ecosystem_track"))
+#    r.dump(datetime.date(year=2018, month=1, day=15), Path("./r_ecosystem_track"))
 
 
 def add(add, cwd):

@@ -26,14 +26,39 @@ def extract_name_and_version(date):
         res =  "0.0.0"
     return common.version_to_tuple_int(res)
 
+def extract_existance(date):
+    cache_file = cache_dir / common.format_date(date)
+    if not cache_file.exists():
+        print("fetch", date)
+        r = requests.get(base_url + common.format_date(date) + "/src/contrib")
+        cache_file.write_text(r.text)
+    print('had', date)
+    raw = cache_file.read_text()
+    tar_gz = [x for x in re.findall(">([^<]+)", raw) if x.endswith(".tar.gz")]
+    name_version = [x.split("_", 1) for x in tar_gz]
+    name_version = {x[0]: x[1] for x in name_version}
+    if name in name_version:
+        return 1
+    else:
+        return 0
+
+
+
 
 cache_dir = Path("temp/bisect")
 cache_dir.mkdir(exist_ok=True)
 earliest = "2014-10-01"
 latest = common.format_date(datetime.date.today())
 
-name, version = sys.argv[1].split("_")
-version = common.version_to_tuple_int(version)
+s = sys.argv[1]
+if '_' in s:
+    name, version = s.split("_")
+    version = common.version_to_tuple_int(version)
+    print("looking for", name, version)
+else:
+    name = s
+    version = None
+    print("Looking for first date for", name)
 
 lower = common.parse_date(earliest)
 upper = common.parse_date(latest)
@@ -63,5 +88,9 @@ def bisect_left(a, x, lo, hi):
     return lo
 
 
-print(f'first rev with {version}', bisect_left(extract_name_and_version,
-        version, lower, upper))
+if version:
+    print(f'first rev with {version}', bisect_left(extract_name_and_version,
+            version, lower, upper))
+else:
+    print(f'first rev at all', bisect_left(extract_existance,
+            1, lower, upper))

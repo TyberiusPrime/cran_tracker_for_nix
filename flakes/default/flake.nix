@@ -29,7 +29,7 @@
                   sha256 =
                     "04kk6wd55bi0f0qsp98ckjxh95q2990vkgq4j83kiajvjciq7s87";
                 };
-                #do_chekc = false;
+                patches = []; # R_patches-generated
               });
 
             };

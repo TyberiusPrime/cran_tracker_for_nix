@@ -108,6 +108,18 @@ class CranTrack:
                 output_filename, a=a.files[0] if a is not None else None, b=b.files[0]
             ):
                 def tie_breaker(name, ver, variant_a, variant_b):
+                    if name == "partools":
+                        if (variant_a["os_type"] == "unix") and (
+                            variant_b["os_type"]
+                            == "Linux/Mac/Unix needed for the dbs() debugging tool"
+                        ):
+                            return variant_a
+                        elif (variant_b["os_type"] == "unix") and (
+                            variant_a["os_type"]
+                            == "Linux/Mac/Unix needed for the dbs() debugging tool"
+                        ):
+                            return variant_b
+
                     but_needs_comp_a = dict_minus_keys(
                         variant_a, ["needs_compilation", "suggests"]
                     )
@@ -122,9 +134,9 @@ class CranTrack:
                             return variant_a
                         elif variant_b["needs_compilation"]:
                             return variant_b
-                        else: # they are identical up to sgugest
-                            la = len(variant_a['suggests'])
-                            lb = len(variant_b['suggests'])
+                        else:  # they are identical up to sgugest
+                            la = len(variant_a["suggests"])
+                            lb = len(variant_b["suggests"])
                             if la > lb:
                                 return variant_a
                             else:
@@ -365,13 +377,10 @@ class CranTrack:
 
         def gen_download_and_hash():
             (self.store_path / "sha256").mkdir(exist_ok=True)
-            for (
-                (name, version),
-                info,
-            ) in self.assemble_all_packages().items():
+            for ((name, version), info,) in self.assemble_all_packages().items():
 
                 def do(
-                    output_filename,
+                    output_filenames,
                     snapshot=info["start_date"],
                     name=name,
                     version=version,
@@ -385,10 +394,11 @@ class CranTrack:
                         return date.strftime("%Y-%m-%d")
 
                     if (name, version) in self.manual_url_overrides:
+                        url = self.manual_url_overrides[name, version]
                         hash_url(
-                            url=self.manual_url_overrides[name, version],
-                            path=output_filename,
+                            url=url, path=output_filenames["sha256"],
                         )
+                        output_filenames["url"].write_text(url)
                     else:
 
                         offset = 0
@@ -398,10 +408,11 @@ class CranTrack:
                             else:
                                 offset_snapshot = snapshot
                             try:
+                                url = f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz"
                                 hash_url(
-                                    url=f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz",
-                                    path=output_filename,
+                                    url, path=output_filenames["sha256"],
                                 )
+                                output_filenames["url"].write_text(url)
                                 break
                             except ValueError:
                                 if "404" in str(ValueError) or "500" in str(
@@ -414,8 +425,15 @@ class CranTrack:
                                         + f"{base_url}{snapshot}/src/contrib/{name}_{version}.tar.gz"
                                     )
 
-                ppg2.FileGeneratingJob(
-                    self.store_path / "sha256" / (name + "_" + version + ".sha256"),
+                ppg2.MultiFileGeneratingJob(
+                    {
+                        "sha256": self.store_path
+                        / "sha256"
+                        / (name + "_" + version + ".sha256"),
+                        "url": self.store_path
+                        / "sha256"
+                        / (name + "_" + version + ".url"),
+                    },
                     do,
                     depend_on_function=False,
                 )
@@ -432,11 +450,7 @@ class CranTrack:
         snapshot_date = snapshot_date
         package_info = self.package_info
         result = {}
-        for (
-            name,
-            version,
-            info,
-        ) in package_info:
+        for (name, version, info,) in package_info:
             pkg_date = datetime.datetime.strptime(info["start_date"], "%Y-%m-%d").date()
             if pkg_date <= snapshot_date:
                 pkg_end_date = info["end_date"]
@@ -471,16 +485,20 @@ class CranTrack:
         end_date = None
         for (name, version, info) in package_info:
             if name == package:
-                if parse_date(info["end_date"]) < before_date:
+                if parse_date(info["start_date"]) < before_date:
                     if not end_date or end_date < info["end_date"]:
                         end_date = info["end_date"]
                         out = (name, version, info)
         if not out:
             return None
+        print("replaced", package)
         return {
             "name": out[0],
             "version": out[1],
             "depends": out[2]["depends"],
-            "imports": out[2]["depends"],
+            "imports": out[2]["imports"],
+            "linking_to": out[2]["linking_to"],
+            "suggests": out[2]["suggests"],
+            "needs_compilation": out[2]["needs_compilation"],
             "snapshot": parse_date(info["start_date"]),
         }
