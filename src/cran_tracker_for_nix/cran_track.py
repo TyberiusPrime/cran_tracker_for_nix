@@ -20,7 +20,10 @@ from .common import (
     hash_url,
     parse_date,
     dict_minus_keys,
+    extract_snapshot_from_url,
 )
+from .bioconductor_overrides import match_override_keys
+from . import bioconductor_overrides
 
 
 base_url = "https://mran.microsoft.com/snapshot/"
@@ -377,7 +380,10 @@ class CranTrack:
 
         def gen_download_and_hash():
             (self.store_path / "sha256").mkdir(exist_ok=True)
-            for ((name, version), info,) in self.assemble_all_packages().items():
+            for (
+                (name, version),
+                info,
+            ) in self.assemble_all_packages().items():
 
                 def do(
                     output_filenames,
@@ -396,7 +402,8 @@ class CranTrack:
                     if (name, version) in self.manual_url_overrides:
                         url = self.manual_url_overrides[name, version]
                         hash_url(
-                            url=url, path=output_filenames["sha256"],
+                            url=url,
+                            path=output_filenames["sha256"],
                         )
                         output_filenames["url"].write_text(url)
                     else:
@@ -410,7 +417,8 @@ class CranTrack:
                             try:
                                 url = f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz"
                                 hash_url(
-                                    url, path=output_filenames["sha256"],
+                                    url,
+                                    path=output_filenames["sha256"],
                                 )
                                 output_filenames["url"].write_text(url)
                                 break
@@ -450,14 +458,16 @@ class CranTrack:
         snapshot_date = snapshot_date
         package_info = self.package_info
         result = {}
-        for (name, version, info,) in package_info:
-            pkg_date = datetime.datetime.strptime(info["start_date"], "%Y-%m-%d").date()
+        for (
+            name,
+            version,
+            info,
+        ) in package_info:
+            pkg_date = parse_date(info["start_date"])
             if pkg_date <= snapshot_date:
                 pkg_end_date = info["end_date"]
                 if pkg_end_date is not None:
-                    pkg_end_date = datetime.datetime.strptime(
-                        pkg_end_date, "%Y-%m-%d"
-                    ).date()
+                    pkg_end_date = parse_date(pkg_end_date)
                     if pkg_end_date < snapshot_date:  # end date is inclusive
                         continue
                 if not name in result or result[name]["date"] < snapshot_date:
@@ -469,8 +479,27 @@ class CranTrack:
                         "linking_to": info["linking_to"],
                         "suggests": info["suggests"],
                         "needs_compilation": info["needs_compilation"],
+                        "snapshot": snapshot_date,
                     }
+        overrides = match_override_keys(
+            bioconductor_overrides.downgrades, "-", snapshot_date
+        )
+        for name, version in overrides.items():
+            if not name in result:
+                raise ValueError(
+                    f"Override for package {name} that's not in packages at this date?"
+                )
+            result[name]["version"] = version
+            result[name]["snapshot"] = parse_date(
+                self.find_snapshot_for_version(name, version)
+            )
         return result
+
+    def find_snapshot_for_version(self, name, version):
+        """use the stored urls to find the right snapshot"""
+        fn = self.store_path / "sha256" / (f"{name}_{version}.url")
+        url = fn.read_text()
+        return extract_snapshot_from_url(name, version, url)
 
     def find_latest_before_disapperance(self, package, before_date):
         """Some packages just disappear from CRAN, but of course

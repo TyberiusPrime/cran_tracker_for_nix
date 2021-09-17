@@ -40,6 +40,7 @@ from .common import (
     version_to_tuple,
 )
 from . import bioconductor_overrides
+from .bioconductor_overrides import match_override_keys
 
 
 class ReleaseInfo:
@@ -490,52 +491,18 @@ class BioconductorRelease:
 
         return result
 
-    def _match_override_keys(
-        self, input_dict, version, date, debug=False, none_ok=False, default=dict
-    ):
-        key = f"{date:%Y-%m-%d}"
-        if debug:
-            print("looking for", version, key)
-        if (version, key) in input_dict:
-            if debug:
-                print("exact match")
-            return input_dict[(version, key)]
-        else:
-            matching = []
-            for k in input_dict:
-                if isinstance(k, tuple):
-                    (kversion, kdate) = k
-                    if kversion == version:
-                        if kdate < key:
-                            matching.append(kdate)
-            matching = sorted(matching)  # should be unnecessary
-            if matching:
-                if debug:
-                    print("using latest date: ", matching[-1])
-                return input_dict[version, matching[-1]]
-
-        if version in input_dict:
-            if debug:
-                print("falling back to version match")
-            return input_dict[version]
-        else:
-            if none_ok:
-                return default()
-            else:
-                raise KeyError(version, date)
-
     def get_excluded_packages_at_date(self, date):
-        return self._match_override_keys(
+        return match_override_keys(
             bioconductor_overrides.excluded_packages, self.str_version, date
         )
 
     def get_flake_info_at_date(self, date):
-        return self._match_override_keys(
+        return match_override_keys(
             bioconductor_overrides.flake_info, self.str_version, date
         )
 
     def get_comment_at_date(self, date):
-        return self._match_override_keys(
+        return match_override_keys(
             bioconductor_overrides.comments,
             self.str_version,
             date,
@@ -548,7 +515,7 @@ class BioconductorRelease:
         # but it also handles cran packages
         errors = []
         for what in ["native_build_inputs", "build_inputs"]:
-            nbi = self._match_override_keys(
+            nbi = match_override_keys(
                 getattr(bioconductor_overrides, what),
                 self.str_version,
                 date,
@@ -563,7 +530,7 @@ class BioconductorRelease:
                     f"pkgs.{n}" if not "." in n and (n != "breakpointHook") else n
                     for n in deps
                 ]
-        skip = self._match_override_keys(
+        skip = match_override_keys(
             bioconductor_overrides.skip_check,
             self.str_version,
             date,
@@ -575,7 +542,7 @@ class BioconductorRelease:
                 all_packages[pkg_name]["skip_check"] = True
 
         for what in ["patches", "hooks"]:
-            for pkg_name, values in self._match_override_keys(
+            for pkg_name, values in match_override_keys(
                 getattr(bioconductor_overrides, what),
                 self.str_version,
                 date,

@@ -409,3 +409,37 @@ def dict_minus_keys(d, keys):
         if k in out:
             del out[k]
     return out
+
+
+def format_nix_value(value):
+    if isinstance(value, (str)):
+        res = f"''{value}''"
+    elif isinstance(value, int):
+        res = f"{value}"
+    elif isinstance(value, bool):
+        if value:
+            res = "true"
+        else:
+            res = "false"
+    elif isinstance(value, list):
+        res = " ".join((format_nix_value(v) for v in value))
+        return res
+    elif isinstance(value, dict):
+        res = "{"
+        for key, v in value.items():
+            res += f"{key} = {format_nix_value(v)};"
+        res += "}"
+    else:
+        raise TypeError()
+    return res
+
+
+def extract_snapshot_from_url(name, version, url):
+    matches = re.findall(
+        r"(\d{4}-\d{2}-\d{2})/src/contrib/" + name + "_" + version + r"\.tar\.gz",
+        url,
+    )
+    if matches:
+        return matches[0]
+    else:
+        return None

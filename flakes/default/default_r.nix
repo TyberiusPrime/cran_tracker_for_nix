@@ -17,7 +17,7 @@ let
       , requireX ? false, broken ? false, hydraPlatforms ? R.meta.hydraPlatforms
       , nativeBuildInputs ? [ ], buildInputs ? [ ], patches ? [ ], url ? false
       , hooks ? { } }:
-      buildRPackage {
+      buildRPackage ({
         name = name;
         version = version;
         src = fetchurl {
@@ -33,7 +33,7 @@ let
         meta.platforms = R.meta.platforms;
         meta.hydraPlatforms = hydraPlatforms;
         meta.broken = broken;
-      } // hooks);
+      } // hooks));
 
   # Templates for generating Bioconductor and CRAN packages
   # from the name, version, sha256, and optional per-package arguments above
@@ -268,8 +268,10 @@ let
       ];
     });
 
-    V8 = old.V8.overrideDerivation
-      (attrs: { preConfigure = "export V8_INCLUDES=${pkgs.v8}/include"; });
+    V8 = old.V8.overrideDerivation (attrs: {
+      preConfigure = "export V8_INCLUDES=${pkgs.v8}/include";
+
+    });
 
   };
 in self

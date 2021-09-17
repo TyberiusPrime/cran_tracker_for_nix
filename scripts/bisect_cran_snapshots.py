@@ -12,11 +12,13 @@ base_url = "https://mran.microsoft.com/snapshot/"
 def extract_name_and_version(date):
     cache_file = cache_dir / common.format_date(date)
     if not cache_file.exists():
-        print("fetch", date)
+        print("fetch", date, end = " ")
         r = requests.get(base_url + common.format_date(date) + "/src/contrib")
         cache_file.write_text(r.text)
-    print('had', date)
+    print('had', date, end=" ")
     raw = cache_file.read_text()
+    if 'Internal Server Error' in raw:
+        raise ValueError()
     tar_gz = [x for x in re.findall(">([^<]+)", raw) if x.endswith(".tar.gz")]
     name_version = [x.split("_", 1) for x in tar_gz]
     name_version = {x[0]: x[1] for x in name_version}
@@ -24,7 +26,9 @@ def extract_name_and_version(date):
         res =  name_version[name].replace(".tar.gz", "")
     else:
         res =  "0.0.0"
-    return common.version_to_tuple_int(res)
+    res =common.version_to_tuple_int(res)
+    print(res)
+    return res
 
 def extract_existance(date):
     cache_file = cache_dir / common.format_date(date)
@@ -60,6 +64,9 @@ else:
     version = None
     print("Looking for first date for", name)
 
+if len(sys.argv) > 2:
+    latest = sys.argv[2]
+
 lower = common.parse_date(earliest)
 upper = common.parse_date(latest)
 
@@ -83,8 +90,16 @@ def bisect_left(a, x, lo, hi):
     while lo < hi:
         mid = datemiddle(lo, hi)
         # Use __lt__ to match the logic in list.sort() and in heapq
-        if a(mid) < x: lo = mid+datetime.timedelta(days=1)
-        else: hi = mid
+        while True:
+            try:
+                if a(mid) < x: lo = mid+datetime.timedelta(days=1)
+                else: hi = mid
+                break
+            except ValueError:
+                print("had to go a day to right", lo, hi, mid)
+                mid = mid + datetime.timedelta(days=1)
+                if mid > hi:
+                    raise ValueError("Went out of range while trying to find a valid value")
     return lo
 
 

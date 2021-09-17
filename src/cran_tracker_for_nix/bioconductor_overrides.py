@@ -1,6 +1,51 @@
 from .common import parse_date
 
 
+def match_override_keys(
+    input_dict, version, date, debug=False, none_ok=False, default=dict
+):
+    """Retrieve the right data from the overrides.
+    Either an exact match,
+    the latest date before,
+    or the 'bc_version' entry.
+
+    if that fails:
+        Raise an exception if none_ok==False
+    or:
+        return default()
+    """
+    key = f"{date:%Y-%m-%d}"
+    if debug:
+        print("looking for", version, key)
+    if (version, key) in input_dict:
+        if debug:
+            print("exact match")
+        return input_dict[(version, key)]
+    else:
+        matching = []
+        for k in input_dict:
+            if isinstance(k, tuple):
+                (kversion, kdate) = k
+                if kversion == version:
+                    if kdate < key:
+                        matching.append(kdate)
+        matching = sorted(matching)  # should be unnecessary
+        if matching:
+            if debug:
+                print("using latest date: ", matching[-1])
+            return input_dict[version, matching[-1]]
+
+    if version in input_dict:
+        if debug:
+            print("falling back to version match")
+        return input_dict[version]
+    else:
+        if none_ok:
+            return default()
+        else:
+            raise KeyError(version, date)
+
+
 def _get_last(collector, new_key, default, copy_anyway):
     """Abstraction to get the last entry.
     See inherit(...) for  semantics.
@@ -119,7 +164,7 @@ inherit(
 inherit(
     flake_info,
     "3.2",
-    {  # still 15.09 - we're in october 15 now.
+    {  # still 15.09 - we're in october 2015 now.
         "nixpkgs.url": "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
         "r_version": "3.2.2",
         "r_tar_gz_sha256": "07a6s865bjnh7w0fqsrkv1pva76w99v86w0w787qpdil87km54cw",
@@ -217,6 +262,7 @@ inherit(
         "easyRNASeq": "needs LSD>=3.0, which shows up on 2015-01-10",
         "seqplots": "needs shiny.>=0.11.0 which shows up on 2015-02-11",
         "MSGFgui": "needs shiny.>=0.11.0 which shows up on 2015-02-11",
+        "HSMMSingleCell": "needs VGAM > 0.9.5, that shows up on 11-07",
     },
 )
 inherit(
@@ -242,9 +288,8 @@ inherit(
 inherit(
     excluded_packages,
     ("3.0", "2014-11-07"),
-    {
-        "HSMMSingleCell": "needs VGAM > 0.9.5, that shows up on 11-07",
-    },
+    {},
+    ["HSMMSingleCell"],
 )
 
 inherit(
@@ -344,8 +389,21 @@ inherit(excluded_packages, ("3.1", "2015-05-16"), {}, ["bamboo"])
 inherit(excluded_packages, ("3.1", "2015-06-09"), {}, ["seqplots"])
 inherit(
     excluded_packages,
+    ("3.1", "2015-06-30"),
+    {
+        "stringi": "Wants to download icudt55l.zip",
+    },
+    [],
+)
+inherit(
+    excluded_packages,
+    ("3.1", "2015-07-02"),
+    {"iptools": "can't find boost::regex"},
+)
+inherit(
+    excluded_packages,
     ("3.1", "2015-07-07"),
-    {"stringi": "Wants to download icudt55l.zip", "iptools": "can't find boost::regex"},
+    {},
     [
         "NetPathMiner",
         "BioNet",
@@ -361,8 +419,30 @@ inherit(
     ["assertive.base"],
 )
 inherit(excluded_packages, ("3.1", "2015-08-01"), {}, ["DT"])
-inherit(excluded_packages, ("3.1", "2015-10-01"), {}, ["NGScopy"])
+inherit(
+    excluded_packages,
+    ("3.1", "2015-10-01"),
+    {
+        "FIACH": "unknown output-sync type 'RTIFY_SOURCE=2'?",
+        "regRSM": "MPI trouble",
+        "Rblpapi": "Missing blpapi_session.h?",
+    },
+    ["NGScopy"],
+)
 
+inherit(  # start anew.
+    excluded_packages,
+    ("3.2"),
+    {
+        "SSOAP": "(omegahat / github only?)",
+        # "RDCOMClient": "(omegahat / github only?)",
+        "XMLRPC": "(omegahat / github only?)",
+        "XMLSchema": "(omegahat / github only?)",
+        "SVGAnnotation": "github only?",
+        "ggrepel": "was added only later",
+    },
+)
+inherit(excluded_packages, ("3.2", "2016-01-10"), {}, ["ggrepel"])
 
 # inherit
 #
@@ -375,6 +455,30 @@ inherit(
     },
 )
 excluded_packages = inherit_to_dict(excluded_packages)
+
+
+# for when a new package can't be used because a dependency hasn't
+# catched up yet, so we want to use an older version of the new package
+# only works for cran packages.
+# these are not bioc version specific, since they're usually pairs
+# of start downgrade / end downgrade.
+downgrades = []
+inherit(downgrades, "-", {})
+inherit(
+    downgrades,
+    ("-", "2015-05-28"),
+    {"RecordLinkage": "0.4-8"},  # , "Namespace trouble -no table.ff in ffbase",
+    [],
+)
+
+
+inherit(
+    downgrades, ("-", "2015-06-05"), {}, ["RecordLinkage"]
+)  # ffbase release, RecordLinkage should work again
+
+
+downgrades = inherit_to_dict(downgrades)
+
 
 # ("3.13", "<2=021-07-01"): [
 # "ggtree",  # missing ggfun
@@ -623,6 +727,7 @@ inherit(
         "openssl": ["openssl"],
         "seqinr": ["zlib"],
         "rbison": ["glpk"],
+        "rDEA": ["glpk"],
     },
 )
 
@@ -641,7 +746,6 @@ inherit(
         "LowMACA": ["which"],
         "mongolite": ["openssl"],
         "PBSddesolve": ["which"],
-        "rDEA": ["glpk"],
         "Rhtslib": ["zlib"],
         "Rlibeemd": ["gsl"],
         "TKF": ["gsl"],
@@ -656,7 +760,7 @@ inherit(
 )
 inherit(
     native_build_inputs,
-    ("3.1", "2015-07-02"),
+    ("3.1", "2015-06-09"),
     {
         "PEIP": ["liblapack", "blas"],
     },
@@ -664,7 +768,7 @@ inherit(
 
 inherit(
     native_build_inputs,
-    ("3.1", "2015-07-09"),
+    ("3.1", "2015-07-11"),
     {
         "PythonInR": ["python"],
     },
@@ -673,17 +777,26 @@ inherit(
     native_build_inputs,
     ("3.1", "2015-10-01"),
     {
-        "VBmix": ["gsl", "fftw", "qt4", "autoreconfHook", "blas", "liblapack"],
+        "VBmix": ["gsl", "fftw", "qt4", "blas", "liblapack"],
         "animation": ["which"],
         # "Rblpapi": ["autoreconfHook"],
-        # "FIACH": ["autoreconfHook"],
         "bedr": ["which"],
         # "xml2": ["autoreconfHook"],
         "curl": ["curl"],
     },
 )
 
-inherit(native_build_inputs, "3.2", {}, [], copy_anyway=True)
+inherit(
+    native_build_inputs,
+    "3.2",
+    {
+        "Rsubread": ["zlib"],
+        "qtbase": ["qt4"],
+        # "PEIP": ["liblapack", "blas"],
+    },
+    [],
+    copy_anyway=True,
+)
 native_build_inputs = inherit_to_dict(native_build_inputs)
 
 build_inputs = []  # run time dependencies
@@ -751,12 +864,13 @@ inherit(
 )
 inherit(
     build_inputs,
-    ("3.1", "2015-07-09"),
+    ("3.1", "2015-07-11"),
     {
         "PythonInR": ["python"],
     },
 )
-# inherit build_inputs,"3.2",{}, [],copy_anyway=True)
+
+inherit(build_inputs, "3.2", {}, [], copy_anyway=True)
 build_inputs = inherit_to_dict(build_inputs)
 
 
@@ -780,7 +894,7 @@ inherit_list(
     ],
 )  # tries to run MPI processes
 inherit_list(skip_check, "3.1", ["pbdMPI"], [], copy_anyway=True)
-inherit_list(skip_check, ("3.1", "2015-10-01"), ["regRSM"], [], copy_anyway=True)
+# inherit_list(skip_check, ("3.1", "2015-10-01"), ["regRSM"], [])
 skip_check = inherit_to_dict(skip_check)
 # inherit_list( skip_check,"3.2", [], [], copy_anyway=True)
 
@@ -839,17 +953,19 @@ inherit(
     patches,
     "3.1",
     {
-        "qtbase": ["../../patches/qtbase.patch"],
+        "qtbase": ["./../patches/qtbase.patch"],
         "RMySQL": ["./../patches/RMySQL.patch"],
     },
 )
 inherit(
     patches,
-    ("3.1", "2015-07-07"),
+    ("3.1", "2015-05-29"),
     {
         "qtbase": ["./../patches/qtbase_1.0.9.patch"],
     },  # bc 3.1
 )
+inherit(patches, ("3.1", "2015-10-01"), {}, ["RMySQL"])
+
 # inherit(
 # patches,
 # ("3.1", "2015-10-01"),
@@ -864,8 +980,19 @@ patches_by_package_version = {}
 hooks = []
 inherit(
     hooks,
+    ("3.1", "2015-05-28"),
+    {"OpenMx": {"preInstall": ["patchShebangs configure\n"]}},
+)
+
+inherit(
+    hooks,
     ("3.1", "2015-10-01"),
-    {"curl": {"preConfigure": ["patchShebangs --build configure\n"]}},
+    {
+        "curl": {"preInstall": ["patchShebangs configure\ncat configure\n"]},
+        "Rblpapi": {"preInstall": ["patchShebangs configure\n"]},
+        "xml2": {"preInstall": ["patchShebangs configure\n"]},
+        "RMySQL": {"preInstall": ["patchShebangs configure\n"]},
+    },
 )
 hooks = inherit_to_dict(hooks)
 
@@ -892,6 +1019,7 @@ extra_snapshots = {}
 for adict in (
     flake_info,
     excluded_packages,
+    downgrades,
     comments,
     package_patches,
     additional_r_dependencies,
