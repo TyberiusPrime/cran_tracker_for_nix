@@ -26,7 +26,7 @@ let
         };
         inherit doCheck requireX;
         propagatedBuildInputs = nativeBuildInputs ++ depends;
-        nativeBuildInputs = nativeBuildInputs ++ depends;
+        nativeBuildInputs = nativeBuildInputs ++ depends ++ [R];
         additional_buildInputs = buildInputs;
         patches = patches;
         meta.homepage = mkHomepage name;

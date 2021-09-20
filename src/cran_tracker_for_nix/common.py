@@ -210,6 +210,11 @@ def download_packages(url, output_filename, temp=False, list_packages=True):
         if r.status_code != 200:
             raise ValueError("Failed to list packages")
 
+        tf =tempfile.NamedTemporaryFile(suffix='.gz')
+        tf.write(r.content)
+        tf.flush()
+        subprocess.check_call(['gunzip','-t', tf.name]) # make sure it's a complete .gz file?
+
         packages = RPackageParser().parse_from_str(
             gzip.decompress(r.content).decode("utf-8", errors="replace"), tar_gz
         )

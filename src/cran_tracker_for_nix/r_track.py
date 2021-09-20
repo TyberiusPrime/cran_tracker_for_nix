@@ -74,6 +74,14 @@ class RTracker:
         )
         return {x[0]: datetime.datetime.strptime(x[1], "%Y-%m-%d").date() for x in res}
 
+    def minor_release_dates(self, r_version):
+        matching = [
+            date
+            for (k, date) in self.r_releases.items()
+            if k.startswith(r_version + ".")
+        ]
+        return matching
+
     def latest_minor_release_at_date(self, r_version, query_date):
         # k looks like 4.1.1'
         matching = [
@@ -92,7 +100,7 @@ class RTracker:
         as given by default.nix, and store them together with their
         commit date.
 
-        See decide_nixpkgs_rev_for_R_version for the downstream logic
+        This was only used for manual lookup
         """
 
         def download(output_filename):
@@ -170,41 +178,8 @@ class RTracker:
 
         ppg2.JobGeneratingJob("gen_nix_pkgs_for_r", gen_extracts).depends_on(input_job)
 
-    def decide_nixpkgs_rev_for_R_version(self, r_version, date):
-        """Given a (minor) R version, we'll pick the nixpkgs revision
-        that had the minor version, and the largest date <= *date*.
-        This should be stable, and is in line with 'what would have been available
-        at the given date.
-
-        todo:
-            -What if there is no rev <= date, but there are revs with r_version?
-            -what if the historic R version has never been packaged?
-            -what if we we're at 'today' and require an R version no yet packaged? (->fix nixpkgs, I suppose)
-
-
-        I had considered just 'vendoring' the R package, but it has considerable drift & patches over the years,
-        and this way should gurantee the surrounding c based eco system to be also 'as of bioconductor date'.
-
-        returns [{'r_version': ..., 'date': ,..., 'commit': ..., 'sha256'...}]
-        """
-        assert isinstance(date, datetime.date)
-        if r_version == "3.1.3":
-            # we had to patch this for inconsolata changes
-            return {
-                "r_version": "3.1.3",
-                "date": datetime.date(2015, 3, 9),
-                "commit": "f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
-                "repo": "TyberiusPrime/nixpkgs",
-            }
-            # , 'sha256': 'sha256-3xbtC4PGpIh9nFLDjvZwVKTVHgHgRqpL4U4iZPkuXW0='}]
-        rev_to_date_and_commit = common.read_json(
-            self.store_path / "nixpkgs_for_r_version.json.gz"
-        )
-        available = rev_to_date_and_commit[r_version]
-        date_ok = sorted(
-            [x for x in available if x["date"] < date], key=lambda x: x["date"]
-        )
-        return date_ok[-1]
+    def get_sha(self, r_version):
+        return Path(self.store_path / (r_version + ".sha256")).read_text()
 
     @staticmethod
     def extract_r_version(commit):

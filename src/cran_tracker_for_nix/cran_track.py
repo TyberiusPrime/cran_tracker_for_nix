@@ -463,6 +463,7 @@ class CranTrack:
             version,
             info,
         ) in package_info:
+
             pkg_date = parse_date(info["start_date"])
             if pkg_date <= snapshot_date:
                 pkg_end_date = info["end_date"]
@@ -481,13 +482,13 @@ class CranTrack:
                         "needs_compilation": info["needs_compilation"],
                         "snapshot": snapshot_date,
                     }
-        overrides = match_override_keys(
-            bioconductor_overrides.downgrades, "-", snapshot_date
+        downgrades = match_override_keys(
+            bioconductor_overrides.downgrades, "-", snapshot_date, release_info=False
         )
-        for name, version in overrides.items():
+        for name, version in downgrades.items():
             if not name in result:
                 raise ValueError(
-                    f"Override for package {name} that's not in packages at this date?"
+                    f"downgrade for package {name} that's not in packages at this date?"
                 )
             result[name]["version"] = version
             result[name]["snapshot"] = parse_date(

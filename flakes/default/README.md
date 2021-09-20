@@ -6,9 +6,7 @@ For every day that Bioconductor changed, there's a commit in this repo, with a
 nix flake that allows you to install R packages and their ecosystem as you
 would have been able to at this date.
 
-
-
-'Changed' means either a release date, or a date on which 
+'Changed' means either a bioconductor release date, an R (minor) release date, or a date on which 
 any bioconductor 'software' package was replaced (only for Bioconductor releases >= 3.6,
 before that no 'Archive' was available.).
 

@@ -38,6 +38,8 @@ from .common import (
     hash_job,
     read_json,
     version_to_tuple,
+    parse_date,
+    format_date,
 )
 from . import bioconductor_overrides
 from .bioconductor_overrides import match_override_keys
@@ -102,12 +104,6 @@ class BioConductorTrack:
             key = release
         return y["r_ver_for_bioc_ver"][key]
 
-    def get_R_version_including_minor(self, release, archive_date, r_track):
-        if release == ("3", "0"):
-            return "3.1.3"  # 3.1.1 by date, but 3.1.3 is the first in nixpkgs passing it's tests
-        major = self.get_R_version(release)
-        return r_track.latest_minor_release_at_date(major, archive_date)
-
     @staticmethod
     def has_archive(version):
         return version >= (3, 6)
@@ -116,7 +112,9 @@ class BioConductorTrack:
         rinfos = self.release_date_ranges
         if isinstance(version, str):
             version = version_to_tuple(version)
-        return BioconductorRelease(version, rinfos[version])
+        return BioconductorRelease(
+            version, rinfos[version], self.get_R_version(version)
+        )
 
     def iter_releases(self):
         for version in self.release_date_ranges:
@@ -134,10 +132,11 @@ class BioConductorTrack:
 class BioconductorRelease:
     """Data fetcher for one bioconductor release"""
 
-    def __init__(self, version: Tuple[str, str], release_info):
+    def __init__(self, version: Tuple[str, str], release_info, major_r_version):
         self.version = version
         self.str_version = ".".join(version)
         self.release_info = release_info
+        self.major_r_version = major_r_version
         self.base_urls = [
             f"https://bioconductor.org/packages/{self.str_version}/",
             # just to distribute the load (and reduce the runtime) somewhat.
@@ -157,7 +156,7 @@ class BioconductorRelease:
         self.store_path.mkdir(exist_ok=True, parents=True)
         self.excluded_packages = bioconductor_overrides.excluded_packages.get(
             self.str_version, None
-        )
+        )  # we need these for all_packages early on.
         self.patch_packages = bioconductor_overrides.package_patches.get(
             self.str_version, {}
         )
@@ -298,6 +297,8 @@ class BioconductorRelease:
             for hit in re.findall(
                 'href="([^/][^/]+)/"', requests.get(base + "Archive").text
             ):
+                if hit == "..":
+                    continue
                 packages[hit] = []
                 for tar_hit in re.findall(
                     r'([^>]+)</a></td><td align="right">(\d{4}-\d{2}-\d{2})',
@@ -331,7 +332,22 @@ class BioconductorRelease:
         """
         return self >= (3, 6)
 
-    def get_cran_dates(self, cran_tracker):
+    def get_R_version_including_minor(self, archive_date, r_track):
+        if self.str_version in bioconductor_overrides.r_versions:
+            return bioconductor_overrides.r_versions[self.str_version]
+        elif (
+            self.str_version,
+            format_date(archive_date),
+        ) in bioconductor_overrides.r_versions:
+            return bioconductor_overrides.r_versions[
+                (self.str_version, format_date(archive_date))
+            ]
+        else:
+            return r_track.latest_minor_release_at_date(
+                self.major_r_version, archive_date
+            )
+
+    def get_cran_dates(self, cran_tracker, r_track):
         """Given our package list and what's in the archives,
         what dates actually had changes?
 
@@ -339,6 +355,17 @@ class BioconductorRelease:
         """
         result = set()
         available = cran_tracker.snapshots
+        for archive_date in r_track.minor_release_dates(self.major_r_version):
+            if (
+                self.release_info.start_date
+                <= archive_date
+                < self.release_info.end_date
+            ):
+                snapshot_date = self.find_closest_available_snapshot(
+                    archive_date, available
+                )
+                result.add((archive_date, snapshot_date))
+
         result.add(
             (
                 self.release_info.start_date,
@@ -462,7 +489,7 @@ class BioconductorRelease:
                         continue
                     else:
                         raise ValueError(
-                            "Package in archive that was not in PACKAGES.gz"
+                            f"Package (package) in archive that was not in PACKAGES.gz"
                         )
 
                 for version, date in sorted(version_dates, key=lambda vd: vd[1]):
@@ -493,22 +520,74 @@ class BioconductorRelease:
 
     def get_excluded_packages_at_date(self, date):
         return match_override_keys(
-            bioconductor_overrides.excluded_packages, self.str_version, date
-        )
+            bioconductor_overrides.excluded_packages,
+            self.str_version,
+            date,
+            release_info=self.release_info,
+        )  # which includes the inherited entries
 
-    def get_flake_info_at_date(self, date):
-        return match_override_keys(
-            bioconductor_overrides.flake_info, self.str_version, date
-        )
+    def get_flake_info_at_date(self, date, r_track):
+        minor_r_version = self.get_R_version_including_minor(date, r_track)
+        r_sha = r_track.get_sha(minor_r_version)
+
+        nixpkgs_to_use = None
+        for str_release_date, nixpkgs_url in sorted(
+            bioconductor_overrides.nix_releases.items()
+        ):
+            if parse_date(str_release_date) <= date:
+                nixpkgs_to_use = nixpkgs_url
+        if nixpkgs_to_use is None:
+            raise ValueError("Failed to find nixpkgs_to_use")
+
+        result = {
+            "r_version": minor_r_version,
+            "r_tar_gz_sha256": r_sha,
+            "nixpkgs.url": nixpkgs_to_use,
+        }
+        if minor_r_version in bioconductor_overrides.r_patches:
+            result["patches"] = bioconductor_overrides.r_patches[minor_r_version]
+
+        return result
 
     def get_comment_at_date(self, date):
         return match_override_keys(
             bioconductor_overrides.comments,
             self.str_version,
             date,
-            lambda: "",
-            lambda x, y: x + y,
+            none_ok=True,
+            default=lambda: "",
+            release_info=self.release_info,
         )
+
+    def get_build_inputs(self, date):  # for dependency tracking
+        res = {}
+        for what in ["native_build_inputs", "build_inputs"]:
+            nbi = match_override_keys(
+                getattr(bioconductor_overrides, what),
+                self.str_version,
+                date,
+                release_info=self.release_info,
+            )
+            res[what] = nbi
+        res["skip"] = match_override_keys(
+            bioconductor_overrides.skip_check,
+            self.str_version,
+            date,
+            none_ok=True,
+            default=lambda: [],
+            release_info=self.release_info,
+        )
+        for what in ["patches", "hooks"]:
+            res[what] = match_override_keys(
+                getattr(bioconductor_overrides, what),
+                self.str_version,
+                date,
+                none_ok=True,
+                release_info=self.release_info,
+            )
+        res["patches_by_version"] = bioconductor_overrides.patches_by_package_version
+        res["needs_x"] = bioconductor_overrides.needs_x
+        return res
 
     def patch_native_dependencies(self, graph, all_packages, excluded, date):
         # this is here because it's bioc version dependent
@@ -519,11 +598,12 @@ class BioconductorRelease:
                 getattr(bioconductor_overrides, what),
                 self.str_version,
                 date,
+                release_info=self.release_info,
             )
             for pkg_name, deps in nbi.items():
                 if not pkg_name in all_packages and not pkg_name in excluded:
                     errors.append(
-                        f"package with {what} but not in graph or excluded: {pkg_name}"
+                        f"package with {what} but not in graph or excluded: {pkg_name} {date}"
                     )
                     continue
                 all_packages[pkg_name][what] = [
@@ -534,8 +614,9 @@ class BioconductorRelease:
             bioconductor_overrides.skip_check,
             self.str_version,
             date,
-            lambda: [],
-            lambda x, y: x.extend(y),
+            none_ok=True,
+            default=lambda: [],
+            release_info=self.release_info,
         )
         for pkg_name in skip:
             if pkg_name in all_packages:
@@ -547,10 +628,11 @@ class BioconductorRelease:
                 self.str_version,
                 date,
                 none_ok=True,
+                release_info=self.release_info,
             ).items():
                 if not pkg_name in all_packages and not pkg_name in excluded:
                     errors.append(
-                        f"package with patches but not in graph or excluded: {pkg_name}"
+                        f"package with {what} but not in graph or excluded: {pkg_name}"
                     )
                 all_packages[pkg_name][what] = values
 
@@ -562,7 +644,11 @@ class BioconductorRelease:
                 ] = bioconductor_overrides.patches_by_package_version[key]
 
         if errors:
-            raise ValueError("\n".join(errors))
+            print(sorted(all_packages.keys()))
+            print(excluded)
+            raise ValueError(
+                "\n".join(errors),
+            )
 
         # extra special magic for samtools injecting zlib
         for node in graph.successors("Rsamtools"):
