@@ -1,0 +1,13 @@
+diff --git a/reg-tests-1c.R b/reg-tests-1c.R
+index b2c9427..5d02452 100644
+--- a/tests/reg-tests-1c.R
++++ b/tests/reg-tests-1c.R
+@@ -806,7 +806,7 @@ tools::assertError(`&`(FALSE))
+ tools::assertError(`|`(TRUE))
+ ## Did not give errors in R <= 3.2.0
+ E <- tryCatch(`!`(), error = function(e)e)
+-stopifnot(grepl("0 arguments .*\\<1", conditionMessage(E)))
++stopifnot(grepl("0 arguments.*\\<1", conditionMessage(E)))
+ ## Gave wrong error message in R <= 3.2.0
+ stopifnot(identical(!matrix(TRUE), matrix(FALSE)),
+ 	  identical(!matrix(FALSE), matrix(TRUE)))
