@@ -1,10 +1,6 @@
-import json
-import hashlib
 import datetime
-import subprocess
 import pypipegraph2 as ppg2
 import re
-import gzip
 import requests
 from pathlib import Path
 from lazy import lazy
@@ -12,11 +8,9 @@ from lazy import lazy
 
 from . import common
 from .common import (
-    RPackageParser,
     download_packages,
     read_json,
     write_json,
-    hash_job,
     hash_url,
     parse_date,
     dict_minus_keys,
@@ -186,7 +180,7 @@ class CranTrack:
                 lost = [
                     name
                     for ((name, _ver), _entry) in pkgs_a.items()
-                    if not name in pkgs_b_names
+                    if name not in pkgs_b_names
                 ]
                 write_json(
                     {"gained": gained, "lost": lost}, output_filename, do_indent=True
@@ -232,7 +226,7 @@ class CranTrack:
                     info = out[
                         key
                     ]  # so that's (snapshot, others) or (snapshot, others, lost_date)
-                    if info["end_date"] == None:
+                    if info["end_date"] is None:
                         out[key]["end_date"] = prev_snapshot
                     else:
                         # this package&ver was added, lost, and added again
@@ -244,7 +238,7 @@ class CranTrack:
             out = [
                 (name, ver, info)
                 for ((name, ver), info) in sorted(out.items())
-                if not name in common.build_into_r
+                if name not in common.build_into_r
             ]
             write_json(out, output_filename, do_indent=True)
 
@@ -380,10 +374,7 @@ class CranTrack:
 
         def gen_download_and_hash():
             (self.store_path / "sha256").mkdir(exist_ok=True)
-            for (
-                (name, version),
-                info,
-            ) in self.assemble_all_packages().items():
+            for ((name, version), info,) in self.assemble_all_packages().items():
 
                 def do(
                     output_filenames,
@@ -402,8 +393,7 @@ class CranTrack:
                     if (name, version) in self.manual_url_overrides:
                         url = self.manual_url_overrides[name, version]
                         hash_url(
-                            url=url,
-                            path=output_filenames["sha256"],
+                            url=url, path=output_filenames["sha256"],
                         )
                         output_filenames["url"].write_text(url)
                     else:
@@ -417,8 +407,7 @@ class CranTrack:
                             try:
                                 url = f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz"
                                 hash_url(
-                                    url,
-                                    path=output_filenames["sha256"],
+                                    url, path=output_filenames["sha256"],
                                 )
                                 output_filenames["url"].write_text(url)
                                 break
@@ -458,11 +447,7 @@ class CranTrack:
         snapshot_date = snapshot_date
         package_info = self.package_info
         result = {}
-        for (
-            name,
-            version,
-            info,
-        ) in package_info:
+        for (name, version, info,) in package_info:
 
             pkg_date = parse_date(info["start_date"])
             if pkg_date <= snapshot_date:
@@ -471,7 +456,7 @@ class CranTrack:
                     pkg_end_date = parse_date(pkg_end_date)
                     if pkg_end_date < snapshot_date:  # end date is inclusive
                         continue
-                if not name in result or result[name]["date"] < snapshot_date:
+                if name not in result or result[name]["date"] < snapshot_date:
                     result[name] = {
                         "version": version,
                         "date": pkg_date,
@@ -486,7 +471,7 @@ class CranTrack:
             bioconductor_overrides.downgrades, "-", snapshot_date, release_info=False
         )
         for name, version in downgrades.items():
-            if not name in result:
+            if name not in result:
                 raise ValueError(
                     f"downgrade for package {name} that's not in packages at this date?"
                 )

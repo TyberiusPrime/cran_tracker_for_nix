@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from lazy import lazy
 import datetime
-import pickle
 import requests
 import re
 from . import common
@@ -189,7 +188,7 @@ class RTracker:
         if vers:
             return vers[0]
         else:
-            vers = re.findall('name = "R-(\d+\.\d+\.\d+)";', r.text)
+            vers = re.findall(r'name = "R-(\d+\.\d+\.\d+)";', r.text)
             if vers:
                 return vers[0]
             else:

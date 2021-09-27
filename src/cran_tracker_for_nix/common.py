@@ -121,7 +121,7 @@ class RPackageParser:
             # continue
             # p["name"] = p["Package"]
             tar_gz_name = f"{p['Package']}_{p['Version']}.tar.gz"
-            if existing_tar_gz is not None and not tar_gz_name in existing_tar_gz:
+            if existing_tar_gz is not None and tar_gz_name not in existing_tar_gz:
                 print("Skipping because of missing tar.gz", p)
                 continue
             out = {}
@@ -210,10 +210,12 @@ def download_packages(url, output_filename, temp=False, list_packages=True):
         if r.status_code != 200:
             raise ValueError("Failed to list packages")
 
-        tf =tempfile.NamedTemporaryFile(suffix='.gz')
+        tf = tempfile.NamedTemporaryFile(suffix=".gz")
         tf.write(r.content)
         tf.flush()
-        subprocess.check_call(['gunzip','-t', tf.name]) # make sure it's a complete .gz file?
+        subprocess.check_call(
+            ["gunzip", "-t", tf.name]
+        )  # make sure it's a complete .gz file?
 
         packages = RPackageParser().parse_from_str(
             gzip.decompress(r.content).decode("utf-8", errors="replace"), tar_gz
@@ -252,7 +254,7 @@ def read_packages_and_versions_from_json(fn):
 
 def read_json(fn):
     def decode_date(obj):
-        if "date" in obj and isinstance(obj["date"], str) and not "T" in obj["date"]:
+        if "date" in obj and isinstance(obj["date"], str) and "T" not in obj["date"]:
             return datetime.datetime.strptime(
                 obj["date"],
                 "%Y-%m-%d",
@@ -337,21 +339,6 @@ def hash_job(url, path):
     )
 
 
-if __name__ == "__main__":
-    import gzip
-
-    f = gzip.GzipFile("2020-06-30.gz")
-    p = RPackageParser()
-    r = p.parse_from_str(f.read().decode("utf-8"))
-    # x = set()
-    # for v in r.values():
-    # x.add(v["NeedsCompilation"])
-    for (k, x), v in r.items():
-        if k == "svglite":
-            print(x, v)
-    # print(x)
-
-
 def day_before(date):
     if isinstance(date, str):
         d = parse_date(date).datetime()
@@ -416,7 +403,13 @@ def dict_minus_keys(d, keys):
     return out
 
 
+def nix_literal(s):
+    return ("NIX_LITERAL", s)
+
+
 def format_nix_value(value):
+    if isinstance(value, tuple) and value[0] == "NIX_LITERAL":
+        res += value[1]
     if isinstance(value, (str)):
         res = f"''{value}''"
     elif isinstance(value, int):
@@ -440,6 +433,8 @@ def format_nix_value(value):
 
 
 def extract_snapshot_from_url(name, version, url):
+    if url is None:
+        return None
     matches = re.findall(
         r"(\d{4}-\d{2}-\d{2})/src/contrib/" + name + "_" + version + r"\.tar\.gz",
         url,

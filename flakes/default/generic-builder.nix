@@ -1,4 +1,4 @@
-{ stdenv, R, xvfb_run, utillinux }:
+{ stdenv, R, xvfb_run, flock, utillinux }:
 
 { name, version, buildInputs ? [ ], additional_buildInputs ? [ ], patches ? [ ]
 , ... }@attrs:
@@ -14,12 +14,14 @@ let
          mkdir $out/$i
       done
     '';
+    propagatedNativeBuildInputs = [xvfb_run flock];
+    propagatedBuildInputs = [xvfb_run];
   });
 
 in stdenv.mkDerivation ({
   name = name + "-" + version;
   buildInputs = buildInputs ++ [ R ]
-    ++ stdenv.lib.optionals attrs.requireX [ utillinux xvfb_run ]
+    #++ stdenv.lib.optionals attrs.requireX [ utillinux xvfb_run ]
     ++ additional_buildInputs
     ++ (if attrs.requireX then [ aThousandLocks ] else [ ]);
   patches = patches;
@@ -53,6 +55,7 @@ in stdenv.mkDerivation ({
   # but we can guess a number, and then flock only that number
   # allowing multiple instances to run in a parallel most of the time
   # and only occasionally colliding - in which case one blocks the other
+  enableParallelBuilding = true;
 
   installPhase = if attrs.requireX or false then ''
     runHook preInstall

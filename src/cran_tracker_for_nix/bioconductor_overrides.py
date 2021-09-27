@@ -1,4 +1,4 @@
-from .common import parse_date, format_date
+from .common import parse_date, format_date, nix_literal
 
 
 def match_override_keys(
@@ -36,7 +36,7 @@ def _match_override_keys(
 ):
     key = f"{date:%Y-%m-%d}"
     if debug:
-        raise ValueErorr()
+        raise ValueError()
     if (version, key) in input_dict:
         if debug:
             print("exact match")
@@ -148,7 +148,7 @@ def inherit_list(collector, new_key, new, remove=None, copy_anyway=False):
     out = out + new
     if remove:
         remove = set(remove)
-        out = [x for x in out if not x in remove]
+        out = [x for x in out if x not in remove]
     collector.append((new_key, out))
 
 
@@ -158,32 +158,68 @@ def inherit_to_dict(inherited):
 
 # all of these follow the following rules for their keys
 comments = {
-    "3.0": """Nixpkgs: 15.09 (Uses https://github.com/TyberiusPrime/nixpkgs instead of nixOS/nixpgs. Font sha256s needed patching).""",
-    "3.1": """Nixpkgs: 15.09 (Uses https://github.com/TyberiusPrime/nixpkgs instead of nixOS/nixpgs. Font sha256s needed patching).""",
+    "3.12": """The assert package was renamed assert_, since assert is a reserverd keyword in nix""",
 }
 
 # overrides, default is by date
 r_versions = {
     # key is bioconductor str_release,
     # or (bioconductor str_release, date)
-    "3.0": "3.1.3"  # 3.1.1 by date, but 3.1.3 is the first in nixpkgs passing it's tests
+    "3.0": "3.1.3",  # 3.1.1 by date, but 3.1.3 is the first in nixpkgs passing it's tests
+    "3.4": "3.3.2",  # 3.3.1 by date (but only for 13 days), and 3.3.1 fails t's tests.
 }
 
 # override, because I want to decide this manually
 nix_releases = {
     # we had to overwrite some font package shas/md5s for 15.09
-    "2013-05-16": "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
-    "2016-03-31": "github:nixOS/nixpkgs?rev=d231868990f8b2d471648d76f07e747f396b9421",  # , (16.03)
-    "2016-10-01": "github:nixOS/nixpkgs?rev=f22817d8d2bc17d2bcdb8ac4308a4bce6f5d1d2b",  # (16.09)
-    "2017-03-30": "github:nixOS/nixpkgs?r_ecosystem_tracks/2019-05-31/flake/REArev=1849e695b00a54cda86cb75202240d949c10c7ce",  # (17.03)
-    "2017-09-29": "github:nixOS/nixpkgs?rev=39cd40f7bea40116ecb756d46a687bfd0d2e550e",  # (17.09)
-    "2017-03-30": "github:nixOS/nixpkgs?rev=1849e695b00a54cda86cb75202240d949c10c7ce",  # (17.03)
-    "2018-04-04": "github:nixOS/nixpkgs?rev=120b013e0c082d58a5712cde0a7371ae8b25a601",  # (18.03)
-    "2019-04-08": "github:nixOS/nixpkgs?rev=f52505fac8c82716872a616c501ad9eff188f97f",  # (19.03)
-    "2019-10-09": "github:nixOS/nixpkgs?rev=d5291756487d70bc336e33512a9baf9fa1788faf",  # (19.09)
-    "2020-04-20": "github:nixOS/nixpkgs?rev=5272327b81ed355bbed5659b8d303cf2979b6953",  # (20.03)
-    "2020-10-25": "github:nixOS/nixpkgs?rev=cd63096d6d887d689543a0b97743d28995bc9bc3",  # (20.09)
-    "2021-05-31": "github:nixOS/nixpkgs?rev=7e9b0dff974c89e070da1ad85713ff3c20b0ca97",  # (21.05)
+    "2013-05-16": (
+        "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
+        "15.09 (Uses https://github.com/TyberiusPrime/nixpkgs instead of nixOS/nixpgs. Font sha256s needed patching)",
+    ),
+    "2016-03-31": (
+        "github:nixOS/nixpkgs?rev=d231868990f8b2d471648d76f07e747f396b9421",
+        "16.03",
+    ),
+    "2016-10-01": (
+        "github:nixOS/nixpkgs?rev=f22817d8d2bc17d2bcdb8ac4308a4bce6f5d1d2b",
+        "16.09",
+    ),
+    "2017-03-30": (
+        "github:nixOS/nixpkgs?rev=1849e695b00a54cda86cb75202240d949c10c7ce",
+        "17.03",
+    ),
+    "2017-09-29": (
+        "github:nixOS/nixpkgs?rev=39cd40f7bea40116ecb756d46a687bfd0d2e550e",
+        "17.09",
+    ),
+    "2018-04-04": (
+        "github:nixOS/nixpkgs?rev=120b013e0c082d58a5712cde0a7371ae8b25a601",
+        "18.03",
+    ),
+    "2018-10-05": (
+        "github:nixOS/nixpkgs=?rev=6a3f5bcb061e1822f50e299f5616a0731636e4e7",
+        "18.09",
+    ),
+    "2019-04-08": (
+        "github:nixOS/nixpkgs?rev=f52505fac8c82716872a616c501ad9eff188f97f",
+        "19.03",
+    ),
+    "2019-10-09": (
+        "github:nixOS/nixpkgs?rev=d5291756487d70bc336e33512a9baf9fa1788faf",
+        "19.09",
+    ),
+    "2020-04-20": (
+        "github:nixOS/nixpkgs?rev=5272327b81ed355bbed5659b8d303cf2979b6953",
+        "20.03",
+    ),
+    "2020-10-25": (
+        "github:nixOS/nixpkgs?rev=cd63096d6d887d689543a0b97743d28995bc9bc3",
+        "20.09",
+    ),
+    "2021-05-31": (
+        "github:nixOS/nixpkgs?rev=7e9b0dff974c89e070da1ad85713ff3c20b0ca97",
+        "21.05",
+    ),
     # todo: is flake correctly setting
 }
 
@@ -194,7 +230,17 @@ bp = ["./r_patches/no-usr-local-search-paths.patch"]
 r_patches = {
     "3.2.2": bp + ["./r_patches/fix-tests-without-recommended-packages.patch"],
     "3.2.3": bp,
-    "3.2.4": bp ,
+    "3.2.4": bp,
+    "3.3.0": bp
+    + [
+        "./r_patches/zlib-version-check.patch",
+        "./r_patches/3.3.0_fix_reg-test-1c.patch",  #    PR#17456 :   ^^ a version that also matches in a --disable-nl
+    ],  # never in nixpkgs
+    # "3.3.1": bp
+    # + [
+    # "./r_patches/zlib-version-check.patch",
+    # this one fails 'base 'tests' without further details
+    # ],  # never in nixpkgs
     "3.3.2": bp + ["./r_patches/zlib-version-check.patch"],
     "3.3.3": bp + ["./r_patches/zlib-version-check.patch"],
     "3.4.0": bp + ["./r_patches/fix-sweave-exit-code.patch "],
@@ -245,6 +291,17 @@ lib.optionals (!withRecommendedPackages) [
     ],
     "4.1.1": bp + ["./r_patches/skip-check-for-aarch64.patch"],
 }
+
+include_tz = """preCheck = "export TZ=CET; bin/Rscript -e 'sessionInfo()'";\n"""
+additional_r_overrides = {
+    "3.3.0": include_tz,  # by 17.09 this is in the nixpkgs R pkg, but not in 17.03 which we use for 3.4.0
+    "3.4.0": include_tz,  # by 17.09 this is in the nixpkgs R pkg, but not in 17.03 which we use for 3.4.0
+}
+flake_overrides = {
+    # R version -> path in ./flakes/
+    "4.0.0": "4.0.0",
+}
+
 
 # packages that we kick out of the index
 # per bioconductor release, and sometimes per date.
@@ -547,6 +604,7 @@ inherit(  # start anew.
         "flowCore": "needs BH 1.60.0.1 - available starting 2015-12-29",
         "ggrepel": "was added only in 10-2016",
         "spliceSites": "needs rbamtools 2.14.3 - available",
+        "iFes": "nvcc  Unsupported gpu architecture 'compute_10'",
     },
 )
 inherit(excluded_packages, ("3.2", "2015-12-29"), {}, ["flowCore"])
@@ -575,26 +633,32 @@ inherit(  # start anew.
     excluded_packages,
     ("3.4"),
     {
-        "cran--PharmacoGx": "never in bioconductor",
-        "cran--statTarget": "never in bioconductor",
-        "cran--synergyfinder": "never in bioconductor",
+        # "nloptr": "nlopt library is broken in nixpkgs 17.04?",
+        "XMLRPC": "(omegahat / github only?)",
+        "SVGAnnotation": "github only?",
+        "cran--PharmacoGx": "newer in bioconductor",
+        "cran--statTarget": "newer in bioconductor",
+        "cran--synergyfinder": "newer in bioconductor",
     },
 )
 inherit(  # start anew.
     excluded_packages,
     ("3.5"),  # 2017-04-25
     {
+        "nloptr": "nlopt library is broken in nixpkgs 17.03",
         "XMLRPC": "(omegahat / github only?)",
         "SVGAnnotation": "github only?",
+        "dbplyr": "only shows up on 2017-06-10",
     },
 )
 inherit(  # start anew.
     excluded_packages,
     ("3.5", "2017-04-25"),
     {
-        "INLA": "never on cran",
+        # "INLA": "never on cran",
     },
 )
+inherit(excluded_packages, ("3.5", "2017-06-10"), {}, ["dbplyr"])  # start anew.
 
 
 inherit(  # start anew.
@@ -607,12 +671,20 @@ inherit(  # start anew.
 )
 inherit(  # start anew.
     excluded_packages,
-    ("3.7"),
+    ("3.7"),  # 2018-05-1
     {
         "iontree": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
         "domainsignatures": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
+        "bioc_software--JASPAR2018": "newer package present in annotation",
+        "bioc_software--MetaGxOvarian": "newer package present in experiment",
     },
 )
+inherit(  # start anew.
+    excluded_packages,
+    ("3.7", "2018-05-26"),
+    {"GenABEL.data": "removed from cran, but still in packages"},
+)
+
 
 inherit(  # start anew.
     excluded_packages,
@@ -621,16 +693,24 @@ inherit(  # start anew.
 )
 
 
-inherit(  # start anew.
+inherit(  # start anew. # 2018-10-31
     excluded_packages,
     ("3.8"),
     {
         #
         "cran--mixOmics": "newer in bioconductor",
+        # "ReporteRsjars": "removed from cran, but still in packages",
+        "ReporteRs": "fgmutils 0.9.4 needs that,though ReporteRs (and ReporteRsjars) is no longer in CRAN",
     },
 )
+inherit(
+    excluded_packages,
+    ("3.8", "2018-11-12"),
+    {},
+    ["ReporteRsjars"],
+)
 
-inherit(  # start anew.
+inherit(  # start anew. - 2019-03-05
     excluded_packages,
     ("3.9"),
     {},
@@ -641,43 +721,89 @@ inherit(  # start anew.
     excluded_packages,
     ("3.10"),  # 2019-10-30
     {
-        "retractable": "shows up on 2019-11-16",
         "charm": "deprecated / removed, but still in packages",
+        "reactable": "only shows up on 2019-11-21",
     },
 )
-inherit(excluded_packages, ("3.10", "2019-11-16"), {}, ["retractable"])  # start anew.
-inherit(  # start anew.
+inherit(excluded_packages, ("3.10", "2019-11-21"), {}, ["reactable"])
+
+inherit(
     excluded_packages,
     ("3.10", "2020-03-03"),
-    {"rphast": "removed from CRAN"},
+    {"rphast": "removed from CRAN on 2020-03-03, but dependencies were not removed"},
 )
 
 
 inherit(  # start anew.
     excluded_packages,
-    ("3.11"),
+    ("3.11"),  # 2020-04-28
     {
         "nem": "deprecated / removed, but still in packages",
         "MTseeker": "deprecated / removed, but still in packages",
         "RIPSeeker": "deprecated / removed, but still in packages",
+        "rtfbs": "requeries rphast, which was removed from CRAN on 2020-03-03",
     },
 )
-
 inherit(  # start anew.
     excluded_packages,
+    ("3.11", "2020-05-14"),
+    {
+        "parcor": "missing ppls",  # check date
+    },
+),
+
+
+inherit(  # start anew. - 2020-10-28
+    excluded_packages,
     ("3.12"),
-    {},
+    {
+        "easyRNASeq": "MacOSX only? no source in 3.12",
+        "SeuratObject": "released later on 2021-01-16",
+        "rTANDEM": "deprecated but still in PACKAGES.gz",
+        "prada": "deprecated but still in PACKAGES.gz",
+        "Roleswitch": "deprecated but still in PACKAGES.gz",
+        "spatstat.core": "released later on 2021-01-23",
+        "FunciSNP.data": "deprecated but still in PACKAGES.gz",
+        "flowType": "deprecated but still in PACKAGES.gz",
+        "DESeq": "deprecated but still in PACKAGES.gz",
+        "PGSEA": "deprecated but still in PACKAGES.gz",
+        "drawer": "released later on 2021-03-03",
+        "spsUtil": "released later on 2021-02-17",
+        "spsComps": "released later on 2021-02-26",
+        "spatstat.geom": "released later on 2021-01-16",
+        "parcor": "missing ppls",
+        # "ppls": "removed from CRAN, but groc still suggests it",
+    },
 )
+inherit(
+    excluded_packages, ("3.12", "2021-01-16"), {}, ["SeuratObject", "spatstat.geom"]
+)
+inherit(excluded_packages, ("3.12", "2021-01-17"), {}, ["spsUtil"])
+inherit(excluded_packages, ("3.12", "2021-01-23"), {}, ["spatstat.core"])
+inherit(excluded_packages, ("3.12", "2021-01-26"), {}, ["spsComps"])
+inherit(excluded_packages, ("3.12", "2021-03-03"), {}, ["drawer"])
 
 
 inherit(  # start anew.
     excluded_packages,
     ("3.13"),
-    {},
+    {
+        "cran--RCSL": "newer in bioconductor",
+        "cran--interacCircos": "newer in bioconductor",
+        "destiny": "no source package / build error according to bioconductor",
+        "synapter": "no source package / build error according to bioconductor",
+        "metagenomeFeatures": "deprecated, but still in PACKAGES.gz",
+        "RDAVIDWebService": "deprecated, but still in PACKAGES.gz",
+        "genoset": "deprecated, but still in PACKAGES.gz",
+        "bigmemoryExtras": "deprecated, but still in PACKAGES.gz",
+        "yulab.utils": "show up on 2021-08-17",
+        "ggfun": "show up on ",
+    },
 )
 
+inherit(excluded_packages, ("3.13", "2021-07-02"), {}, ["ggfun"])
+inherit(excluded_packages, ("3.13", "2021-08-17"), {}, ["yulab.utils"])
 
-#
 excluded_packages = inherit_to_dict(excluded_packages)
 
 
@@ -703,8 +829,8 @@ inherit(
 inherit(
     downgrades,
     ("-", "2016-01-10"),
-    {"synchronicity": "1.1.4"},  # boost trouble
-    [],
+    {"synchronicity": "1.1.4"},
+    [],  # boost trouble
 )
 
 inherit(
@@ -785,6 +911,7 @@ inherit(
         "affyio": ["zlib"],
         "ArrayExpressHTS": ["which"],
         "audio": ["portaudio"],
+        "BayesLogit": ["openblasCompat"],
         "BayesSAE": ["gsl"],
         "BayesVarSel": ["gsl"],
         "BayesXsrc": ["readline", "ncurses"],
@@ -1130,12 +1257,75 @@ inherit(
     {},
     ["pcaPA"],
 )
-inherit(native_build_inputs, "3.9", {}, ["birte"], copy_anyway=True)
+inherit(
+    native_build_inputs,
+    "3.9",
+    {
+        "KernSmooth": ["which"],
+        "MASS": ["which"],
+        "boot": ["which"],
+        "cluster": ["which"],
+        "densratio": ["which"],
+        "foreign": ["which"],
+        "nnet": ["which"],
+        "rpart": ["which"],
+        "Segmentor3IsBack": ["which"],
+        "ARRmData": ["which"],
+        "dummy": ["which"],
+    },
+    ["birte"],
+    copy_anyway=True,
+)
 
-inherit(native_build_inputs, "3.10", {}, [], copy_anyway=True)
-inherit(native_build_inputs, "3.11", {}, [], copy_anyway=True)
-inherit(native_build_inputs, "3.12", {}, [], copy_anyway=True)
-inherit(native_build_inputs, "3.13", {}, [], copy_anyway=True)
+inherit(native_build_inputs, "3.10", {}, ["rMAT"], copy_anyway=True)
+inherit(
+    native_build_inputs,
+    "3.11",
+    {
+        "qtbase": ["qt4", "cmake"],
+    },
+    [
+        "rpg",
+        "rphast",
+        "rPython",
+        "rTANDEM",
+        "rtfbs",
+        "rtiff",
+        "dbConnect",
+        "TKF",
+        "PythonInR",
+        "WhopGenome",
+        "Segmentor3IsBack",
+        "geoCount",
+        "R2GUESS",
+        "rbamtools",
+        "RJaCGH",
+        "RODBCext",
+    ],
+    copy_anyway=True,
+)
+inherit(
+    native_build_inputs,
+    ("3.11", "2020-09-09"),  # wrong date, TODO
+    {},
+    [
+        "outbreaker",
+        "qtbase",
+        "qtpaint",
+    ],
+)
+
+inherit(native_build_inputs, "3.12", {}, ["MotIV", "pbdNCDF4"], copy_anyway=True)
+inherit(
+    native_build_inputs,
+    "3.13",
+    {},
+    [
+        "rggobi",
+        "rMAT",
+    ],
+    copy_anyway=True,
+)
 
 native_build_inputs = inherit_to_dict(native_build_inputs)
 
@@ -1246,7 +1436,21 @@ inherit(build_inputs, "3.7", {}, [], copy_anyway=True)
 inherit(build_inputs, "3.8", {}, ["flowQ"], copy_anyway=True)
 inherit(build_inputs, "3.9", {}, [], copy_anyway=True)
 inherit(build_inputs, "3.10", {}, [], copy_anyway=True)
-inherit(build_inputs, "3.11", {}, [], copy_anyway=True)
+inherit(
+    build_inputs,
+    "3.11",
+    {},
+    [
+        "geoCount",
+        "rPython",
+        "PET",
+    ],
+    copy_anyway=True,
+)
+inherit(
+    build_inputs, ("3.11", "2020-09-09"), {}, ["qtbase", "qtpaint"]  # Todo: fix date
+)
+
 inherit(build_inputs, "3.12", {}, [], copy_anyway=True)
 inherit(build_inputs, "3.13", {}, [], copy_anyway=True)
 
@@ -1318,7 +1522,20 @@ inherit(
     patches,
     "3.0",
     {
+        "BayesBridge": ["./../patches/BayesBridge.patch"],
+        "bayesLogit": ["./../patches/BayesLogit.patch"],
+        "BayesXsrc": ["./../patches/BayesXsrc.patch"],
+        "CARramps": ["./../patches/CARramps.patch"],
+        "EMCluster": ["./../patches/EMCluster.patch"],
+        "gmatrix": ["./../patches/gmatrix.patch"],
+        "gputools": ["./../patches/gputools.patch"],
+        "iFes": ["./../patches/iFes.patch"],
         "qtbase": ["./../patches/qtbase.patch"],
+        "RAppArmor": ["./../patches/RAppArmor.patch"],
+        "rpud": ["./../patches/rpud.patch"],
+        "RServe": ["./../patches/Rserve.patch"],
+        "spMC": ["./../patches/spMC.patch"],
+        "WideLM": ["./../patches/WideLM.patch"],
     },
 )
 
@@ -1367,44 +1584,119 @@ patches = inherit_to_dict(patches)
 
 patches_by_package_version = {}
 
-hooks = []
+attrs = []
+shebangs = {"patchPhase": "patchShebangs configure"}
+
 inherit(
-    hooks,
+    attrs,
+    "3.0",
+    {
+        "RcppArmadillo": shebangs,
+        "rpf": shebangs,
+        "xml2": {
+            "preConfigure": "export LIBXML_INCDIR=${pkgs.libxml2}/include/libxml2"
+        },
+        "curl": {"preConfigure": "export CURL_INCLUDES=${pkgs.curl}/include"},
+        "iFes": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
+        "rJava": {
+            "preConfigure": """
+                export JAVA_CPPFLAGS=-I${pkgs.jdk}/include/
+                export JAVA_HOME=${pkgs.jdk}
+        """
+        },
+        "SJava": {
+            "preConfigure": """
+        export JAVA_CPPFLAGS=-I${pkgs.jdk}/include
+        export JAVA_HOME=${pkgs.jdk}
+      """
+        },
+        "JavaGD": {
+            "preConfigure": """
+        export JAVA_CPPFLAGS=-I${pkgs.jdk}/include/
+        export JAVA_HOME=${pkgs.jdk}
+      """
+        },
+        "Mposterior": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
+        "Rmpi": {"configureFlags": ["--with-Rmpi-type=OPENMPI"]},
+        "Rmpfr": {"configureFlags": ["--with-mpfr-include=${pkgs.mpfr}/include"]},
+        "RVowpalWabbit": {
+            "configureFlags": [
+                "--with-boost=${pkgs.boost.dev}",
+                "--with-boost-libdir=${pkgs.boost.lib}/lib",
+            ],
+        },
+        "RAppArmor": {"LIBAPPARMOR_HOME": "${pkgs.libapparmor}"},
+        "RMySQL": {"MYSQL_DIR": "${pkgs.mysql.lib}"},
+        "devEMF": {"NIX_CFLAGS_LINK": "-L${pkgs.xlibs.libXft}/lib -lXft"},
+        "slfm": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
+        "SamplerCompare": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
+        "gputools": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
+        # It seems that we cannot override meta attributes with overrideDerivation.
+        "CARramps": {
+            "hydraPlatforms": "stdenv.lib.platforms.none",
+            "configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"],
+        },
+        "gmatrix": {
+            "CUDA_LIB_PATH": "${pkgs.cudatoolkit}/lib64",
+            "R_INC_PATH": "${pkgs.R}/lib/R/include",
+            "CUDA_INC_PATH": "${pkgs.cudatoolkit}/usr_include",
+        },
+        # It seems that we cannot override meta attributes with overrideDerivation.
+        "rpud": {
+            "hydraPlatforms": nix_literal("stdenv.lib.platforms.none"),
+            "CUDA_HOME": "${pkgs.cudatoolkit}",
+        },
+        "WideLM": {"configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"]},
+        "openssl": {"OPENSSL_INCLUDES": "${pkgs.openssl}/include"},
+        "Rserve": {"configureFlags": ["--with-server" "--with-client"]},
+        "nloptr": {
+            "configureFlags": [
+                "--with-nlopt-cflags=-I${pkgs.nlopt}/include"
+                "--with-nlopt-libs='-L${pkgs.nlopt}/lib -lnlopt_cxx -lm'"
+            ]
+        },
+        "V8": {
+            "preConfigure": "export V8_INCLUDES=${pkgs.v8}/include",
+        },
+    },
+)
+inherit(
+    attrs,
     ("3.1", "2015-05-28"),
-    {"OpenMx": {"preInstall": ["patchShebangs configure\n"]}},
+    {"OpenMx": shebangs},
 )
 
 inherit(
-    hooks,
+    attrs,
     ("3.1", "2015-10-01"),
     {
-        "curl": {"preInstall": ["patchShebangs configure\n"]},
-        "Rblpapi": {"preInstall": ["patchShebangs configure\n"]},
-        "xml2": {"preInstall": ["patchShebangs configure\n"]},
-        "RMySQL": {"preInstall": ["patchShebangs configure\n"]},
+        "curl": shebangs,
+        "Rblpapi": shebangs,
+        "xml2": shebangs,
+        "RMySQL": shebangs,
     },
 )
 
 inherit(
-    hooks,
+    attrs,
     "3.2",
     {
-        "Rsomoclu": {"preInstall": ["patchShebangs configure\n"]},
-        "mongolite": {"preInstall": ["patchShebangs configure\n"]},
-        "openssl": {"preInstall": ["patchShebangs configure\n"]},
+        "Rsomoclu": shebangs,
+        "mongolite": shebangs,
+        "openssl": shebangs,
     },
     copy_anyway=True,
 )
 inherit(
-    hooks,
+    attrs,
     ("3.2", "2016-01-10"),
     {
-        "gdtools": {"preInstall": ["patchShebangs configure\n"]},
+        "gdtools": shebangs,
     },
 )
 
 
-hooks = inherit_to_dict(hooks)
+attrs = inherit_to_dict(attrs)
 
 
 # dates at which we also need to build the r_eco_system
@@ -1420,7 +1712,7 @@ for adict in (
     build_inputs,
     skip_check,
     patches,
-    hooks,
+    attrs,
 ):
     if not isinstance(adict, dict):
         raise TypeError(adict)
@@ -1430,7 +1722,7 @@ for adict in (
                 raise ValueError("Invalid spec", key)
             bc_version, date = key
             parse_date(date)
-            if not bc_version in extra_snapshots:
+            if bc_version not in extra_snapshots:
                 extra_snapshots[bc_version] = set()
             extra_snapshots[bc_version].add(date)
 

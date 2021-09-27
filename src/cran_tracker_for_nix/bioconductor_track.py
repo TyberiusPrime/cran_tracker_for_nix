@@ -21,18 +21,13 @@ import gzip
 import json
 import yaml
 import io
-import pprint
-import hashlib
-import collections
 from typing import Tuple
 import random
 import functools
 from lazy import lazy
 import pypipegraph2 as ppg2
-from networkx.algorithms.dag import descendants
 from . import common
 from .common import (
-    RPackageParser,
     download_packages,
     read_packages_and_versions_from_json,
     hash_job,
@@ -78,7 +73,6 @@ class BioConductorTrack:
         """Bioconductor releases, when were they current?"""
         y = self.config_yaml
         release_dates = y["release_dates"]
-        r_ver_for_bioc_ver = y["r_ver_for_bioc_ver"]
         release_dates = {
             k: datetime.datetime.strptime(v, "%m/%d/%Y").date()
             for (k, v) in release_dates.items()
@@ -482,14 +476,14 @@ class BioconductorRelease:
                 }
         if kind == "software":
             for package, version_dates in self.load_archive().items():
-                if not package in result:
+                if package not in result:
                     if package == "BiocInstaller":
                         # yeah...  you never distributed biocInstaller via bioconductor otherwise,
                         # so we're going to ignore you
                         continue
                     else:
                         raise ValueError(
-                            f"Package (package) in archive that was not in PACKAGES.gz"
+                            f"Package {package} in archive that was not in PACKAGES.gz"
                         )
 
                 for version, date in sorted(version_dates, key=lambda vd: vd[1]):
@@ -531,21 +525,35 @@ class BioconductorRelease:
         r_sha = r_track.get_sha(minor_r_version)
 
         nixpkgs_to_use = None
-        for str_release_date, nixpkgs_url in sorted(
+        nixpkgs_comment = ""
+        for str_release_date, (nixpkgs_url, this_comment) in sorted(
             bioconductor_overrides.nix_releases.items()
         ):
             if parse_date(str_release_date) <= date:
                 nixpkgs_to_use = nixpkgs_url
+                nixpkgs_comment = this_comment
         if nixpkgs_to_use is None:
             raise ValueError("Failed to find nixpkgs_to_use")
+        if self.str_version in bioconductor_overrides.comments:
+            nixpkgs_comment += "\n" + bioconductor_overrides.comments[self.str_version]
+        nixpkgs_comment = nixpkgs_comment.strip()
 
         result = {
             "r_version": minor_r_version,
             "r_tar_gz_sha256": r_sha,
             "nixpkgs.url": nixpkgs_to_use,
+            "comment": nixpkgs_comment,
         }
         if minor_r_version in bioconductor_overrides.r_patches:
             result["patches"] = bioconductor_overrides.r_patches[minor_r_version]
+        if minor_r_version in bioconductor_overrides.additional_r_overrides:
+            result[
+                "additionalOverrides"
+            ] = bioconductor_overrides.additional_r_overrides[minor_r_version]
+        if minor_r_version in bioconductor_overrides.flake_overrides:
+            result["flake_override"] = bioconductor_overrides.flake_overrides[
+                minor_r_version
+            ]
 
         return result
 
@@ -577,7 +585,7 @@ class BioconductorRelease:
             default=lambda: [],
             release_info=self.release_info,
         )
-        for what in ["patches", "hooks"]:
+        for what in ["patches", "attrs"]:
             res[what] = match_override_keys(
                 getattr(bioconductor_overrides, what),
                 self.str_version,
@@ -601,13 +609,13 @@ class BioconductorRelease:
                 release_info=self.release_info,
             )
             for pkg_name, deps in nbi.items():
-                if not pkg_name in all_packages and not pkg_name in excluded:
+                if pkg_name not in all_packages and pkg_name not in excluded:
                     errors.append(
                         f"package with {what} but not in graph or excluded: {pkg_name} {date}"
                     )
                     continue
                 all_packages[pkg_name][what] = [
-                    f"pkgs.{n}" if not "." in n and (n != "breakpointHook") else n
+                    f"pkgs.{n}" if "." not in n and (n != "breakpointHook") else n
                     for n in deps
                 ]
         skip = match_override_keys(
@@ -622,7 +630,7 @@ class BioconductorRelease:
             if pkg_name in all_packages:
                 all_packages[pkg_name]["skip_check"] = True
 
-        for what in ["patches", "hooks"]:
+        for what in ["patches", "attrs"]:
             for pkg_name, values in match_override_keys(
                 getattr(bioconductor_overrides, what),
                 self.str_version,
@@ -630,7 +638,7 @@ class BioconductorRelease:
                 none_ok=True,
                 release_info=self.release_info,
             ).items():
-                if not pkg_name in all_packages and not pkg_name in excluded:
+                if pkg_name not in all_packages and pkg_name not in excluded:
                     errors.append(
                         f"package with {what} but not in graph or excluded: {pkg_name}"
                     )
