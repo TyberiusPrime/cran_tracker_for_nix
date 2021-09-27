@@ -4,6 +4,35 @@ let
   # Nix fails if we add in thousands of dependencies,
   # because at some point it adds nativeBuildInputs to a bash argument list.
   # we therefore shard the list of packages, and then join the shards
+  # for now, sharding on first letter is enough
+  # (though we aggregate some very rare letters)
+  findRInput = ''
+    findRInput() {
+      local -r pkg="$1"
+      echo "findRInput $pkg"
+      if [[ ''${already_handled[$pkg]} != "1" ]]; then
+        already_handled[$pkg]="1"
+        if test -d $pkg/library/; then
+          echo "Found lib in $pkg"
+          ln -s $pkg/library/* $out/lib/R/library/
+        fi
+        if test -f $pkg/nix-support/propagated-build-inputs; then 
+          mapfile -d " " inputs < "$pkg/nix-support/propagated-build-inputs"
+          for input in "''${inputs[@]}"
+          do
+            findRInput $input
+          done
+        fi
+        if test -f $pkg/nix-support/r_links; then 
+          mapfile -d " " inputs < "$pkg/nix-support/r_links"
+          for input in "''${inputs[@]}"
+          do
+            findRInput $input
+          done
+        fi
+      fi
+    }
+  '';
   mkshart = regex: wname: packages:
     let
       shard_func = x: (builtins.match ("r-" + regex + ".*") x.name) != null;
@@ -13,51 +42,23 @@ let
       preferLocalBuild = true;
       allowSubstitutes = false;
 
-      # propagatedNativeBuildInputs = subset;
-
       nativeBuildInputs = subset;
-      # #paths = subset;
+      propagatedBuildInputs = subset;
+      propagatedNativeBuildInputs = subset;
 
-      # #nativeBuildInputs = [ makeWrapper R ];
+      unpackPhase = ":";
+      #we tried findInputs, but that stopped working around 20.03
+      #because the acc vars were undeclared before this phase
+      installPhase = ''
+        mkdir $out/nix-support -p
+        mkdir $out/lib/R/library -p
+        declare -A already_handled
 
-       unpackPhase = ":";
-       installPhase = ''
-         mkdir $out/lib/R/library -p
-          # find out what packages we need to symlink
-          for i in $nativeBuildInputs; do
-            findInputs $i apkg "propagated-native-build-inputs"
-          done
+        if [[ $nativeBuildInputs ]]; then
+          echo $nativeBuildInputs >$out/nix-support/r_links
+        fi
+      '';
 
-          for i in $apkg; do
-            if test -d $i/library/; then
-              ln -s $i/library/* $out/lib/R/library/
-            fi
-          done
-       '';
-
-      #   echo "Hello world"
-
-      #   #replicate symlink join
-      #   mkdir -p $out/lib/R
-      #   for i in $paths; do
-      #     ${lndir}/bin/lndir $i $out/lib/R
-      #   done
-      #   pkgs=""
-      #   for i in $nativeBuildInputs; do
-      #     findInputs $i;
-      #   done
-      #   echo "pkgs" $pkgs;
-      #   echo "buildInputs" $buildInputs
-      #   echo "nativeBuildInputs" $nativeBuildInputs
-      #   ls -la $out
-      #   ls -la $out/lib/R
-      #   exit 1
-      # '';
-
-      # meta = R.meta // {
-      #   # To prevent builds on hydra
-      #   hydraPlatforms = [ ];
-      # };
     };
   all_packages = recommendedPackages ++ packages;
   shards = [
@@ -91,6 +92,7 @@ let
     (mkshart "[XYZ]" "XYZ" all_packages)
     (mkshart "[^A-Za-z]" "other" all_packages)
   ];
+  # and this is the final, aggregate everything derivation.
 in stdenv.mkDerivation {
   name = R.name + "-wrapper";
   preferLocalBuild = true;
@@ -103,7 +105,7 @@ in stdenv.mkDerivation {
   nativeBuildInputs = [ makeWrapper R ] ++ shards;
 
   unpackPhase = ":";
-  installPhase = ''
+  installPhase = findRInput + ''
 
     #wee need more than just bin.
     mkdir -p $out/bin
@@ -120,17 +122,12 @@ in stdenv.mkDerivation {
         --set R_LIBS_SITE $out/lib/R/library \
         --set LC_ALL C
     done
-
+    declare -A already_handled
     # find out what packages we need to symlink
     for i in $nativeBuildInputs; do
-      findInputs $i apkg "propagated-native-build-inputs"
+      findRInput $i
     done
 
-    for i in $nativeBuildInputs;  do
-      if test -d $i/lib/R/library; then
-        ${lndir}/bin/lndir $i/lib/R/library $out/lib/R/library/
-      fi
-    done
   '';
 
   # Make the list of recommended R packages accessible to other packages such as rpy2
