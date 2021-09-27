@@ -15,7 +15,8 @@ def extract_name_and_version(date):
         print("fetch", date, end = " ")
         r = requests.get(base_url + common.format_date(date) + "/src/contrib")
         cache_file.write_text(r.text)
-    print('had', date, end=" ")
+    else:
+        print('had', date, end=" ")
     raw = cache_file.read_text()
     if 'Internal Server Error' in raw:
         raise ValueError()
@@ -88,6 +89,7 @@ def bisect_left(a, x, lo, hi):
     """
 
     while lo < hi:
+        print('range', lo, hi, (hi-lo).days)
         mid = datemiddle(lo, hi)
         # Use __lt__ to match the logic in list.sort() and in heapq
         while True:
