@@ -4,4 +4,5 @@ result/
 result
 stderr*
 .packages_tested.ignore
-.done
+.cran_track_done
+.cran_track_added

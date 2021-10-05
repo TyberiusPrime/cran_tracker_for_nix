@@ -407,28 +407,37 @@ def nix_literal(s):
     return ("NIX_LITERAL", s)
 
 
+def is_nix_literal(s):
+    return isinstance(s, tuple) and s[0] == "NIX_LITERAL"
+
+
 def format_nix_value(value):
-    if isinstance(value, tuple) and value[0] == "NIX_LITERAL":
-        res += value[1]
-    if isinstance(value, (str)):
-        res = f"''{value}''"
-    elif isinstance(value, int):
-        res = f"{value}"
+    if is_nix_literal(value):
+        res = value[1]
+    elif isinstance(value, (str)):
+        if "\n" in value:
+            res = f"''{value}''"
+        else:
+            res = '"' + value.replace('"', '\\"') + '"'
     elif isinstance(value, bool):
         if value:
             res = "true"
         else:
             res = "false"
+    elif isinstance(value, int):
+        res = f"{value}"
     elif isinstance(value, list):
         res = " ".join((format_nix_value(v) for v in value))
-        return res
+        return "[" + res + "]"
     elif isinstance(value, dict):
         res = "{"
         for key, v in value.items():
-            res += f"{key} = {format_nix_value(v)};"
+            res += f"{key} = {format_nix_value(v)}; "
+        if value:
+            res = res[:-1]
         res += "}"
     else:
-        raise TypeError()
+        raise TypeError(value, type(value))
     return res
 
 

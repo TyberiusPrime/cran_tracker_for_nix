@@ -374,7 +374,10 @@ class CranTrack:
 
         def gen_download_and_hash():
             (self.store_path / "sha256").mkdir(exist_ok=True)
-            for ((name, version), info,) in self.assemble_all_packages().items():
+            for (
+                (name, version),
+                info,
+            ) in self.assemble_all_packages().items():
 
                 def do(
                     output_filenames,
@@ -393,7 +396,8 @@ class CranTrack:
                     if (name, version) in self.manual_url_overrides:
                         url = self.manual_url_overrides[name, version]
                         hash_url(
-                            url=url, path=output_filenames["sha256"],
+                            url=url,
+                            path=output_filenames["sha256"],
                         )
                         output_filenames["url"].write_text(url)
                     else:
@@ -407,7 +411,8 @@ class CranTrack:
                             try:
                                 url = f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz"
                                 hash_url(
-                                    url, path=output_filenames["sha256"],
+                                    url,
+                                    path=output_filenames["sha256"],
                                 )
                                 output_filenames["url"].write_text(url)
                                 break
@@ -443,12 +448,20 @@ class CranTrack:
     def package_info(self):
         return read_json(self.store_path / "package_to_snapshot.json.gz")
 
-    def latest_packages_at_date(self, snapshot_date):
+    def latest_packages_at_date(self, snapshot_date, bioc_str_version):
         snapshot_date = snapshot_date
         package_info = self.package_info
         result = {}
-        for (name, version, info,) in package_info:
 
+        additional_dependencies = bioconductor_overrides.additional_r_dependencies.get(
+            bioc_str_version, {}
+        ).get("cran", {})
+
+        for (
+            name,
+            version,
+            info,
+        ) in package_info:
             pkg_date = parse_date(info["start_date"])
             if pkg_date <= snapshot_date:
                 pkg_end_date = info["end_date"]
@@ -456,6 +469,8 @@ class CranTrack:
                     pkg_end_date = parse_date(pkg_end_date)
                     if pkg_end_date < snapshot_date:  # end date is inclusive
                         continue
+                if name in additional_dependencies:
+                    info["depends"] += additional_dependencies[name]
                 if name not in result or result[name]["date"] < snapshot_date:
                     result[name] = {
                         "version": version,

@@ -1,0 +1,24 @@
+diff --git a/configure b/configure
+index b58173e..a524845 100755
+--- a/configure
++++ b/configure
+@@ -13,7 +13,7 @@ if [[ "$OSTYPE" == "darwin"* ]] && [[ -z "$MONGOLITE_USE_OPENSSL" ]]; then
+ fi
+ 
+ # Library settings
+-PKG_CONFIG_NAME="openssl"
++PKG_CONFIG_NAME="openssl libsasl zlib"
+ PKG_DEB_NAME="libssl-dev, libsasl2-dev"
+ PKG_RPM_NAME="openssl-devel, cyrus-sasl-devel"
+ PKG_CSW_NAME="libssl_dev, sasl_dev"
+@@ -77,8 +77,8 @@ CFLAGS=$(${R_HOME}/bin/R CMD config CFLAGS)
+ CPPFLAGS=$(${R_HOME}/bin/R CMD config CPPFLAGS)
+ 
+ # Test configuration
+-echo "#include $PKG_TEST_1" | ${CC} ${CPPFLAGS} ${PKG_CFLAGS} ${CFLAGS} -E -xc - >/dev/null 2>&1 || R_CONFIG_ERROR=1;
+-echo "#include $PKG_TEST_2" | ${CC} ${CPPFLAGS} ${PKG_CFLAGS} ${CFLAGS} -E -xc - >/dev/null 2>&1 || R_CONFIG_ERROR=1;
++echo "#include $PKG_TEST_1" | ${CC} ${CPPFLAGS} ${PKG_CFLAGS} ${CFLAGS} -E -xc - || R_CONFIG_ERROR=1;
++echo "#include $PKG_TEST_2" | ${CC} ${CPPFLAGS} ${PKG_CFLAGS} ${CFLAGS} -E -xc - || R_CONFIG_ERROR=1;
+ 
+ # Customize the error
+ if [ $R_CONFIG_ERROR ]; then

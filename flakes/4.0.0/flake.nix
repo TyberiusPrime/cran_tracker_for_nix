@@ -6,7 +6,7 @@
       "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c";
     nixpkgs.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
-    nixpkgs_master.url = # breakpointhub is not available before 19.03
+    nixpkgs_master.url = # breakpointHook is not available before 19.03
       "github:nixOS/nixpkgs?rev=e55bd22bbca511c4613a33d809870792d7968d1c";
   };
 

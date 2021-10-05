@@ -23,6 +23,7 @@ from .common import (
     format_nix_value,
     parse_date,
     extract_snapshot_from_url,
+    nix_literal,
 )
 from . import bioconductor_overrides, common
 from .bioconductor_overrides import match_override_keys
@@ -32,7 +33,136 @@ def make_name_safe_for_nix(name):
     name = name.replace(".", "_")
     if name == "assert":
         name = "assert_"
+    elif name == "import":
+        name = "import_"
     return name
+
+
+def dump_subgraph_for_debug(graph):
+    """Take every job leading up to this job
+    and write a mock dependency graph to
+    subgraph_debug.py
+
+    Very handy for debugging, but ugly :).
+
+    Note that you can just throw out Jobs later,
+    the edges of non-existant jobs will be ignored.
+    """
+
+    import pypipegraph2 as ppg
+
+    nodes = []
+    seen = set()
+    edges = []
+    counter = [0]
+    node_to_counters = {}
+
+    def descend(node):
+        if node in seen:
+            return
+        seen.add(node)
+        j = graph.jobs[node]
+        if isinstance(j, ppg.FileInvariant):
+            nodes.append(f"Path('{counter[0]}').write_text('A')")
+            nodes.append(f"job_{counter[0]} = ppg.FileInvariant('{counter[0]}')")
+        elif isinstance(j, ppg.ParameterInvariant):
+            nodes.append(
+                f"job_{counter[0]} = ppg.ParameterInvariant('{counter[0]}', 55)"
+            )
+        elif isinstance(j, ppg.FunctionInvariant):
+            nodes.append(
+                f"job_{counter[0]} = ppg.FunctionInvariant('{counter[0]}', lambda: 55)"
+            )
+        elif isinstance(j, ppg.SharedMultiFileGeneratingJob):
+            nodes.append(
+                f"job_{counter[0]} = ppg.SharedMultiFileGeneratingJob('{counter[0]}', {[x.name for x in j.files]!r}, dummy_smfg, depend_on_function=False)"
+            )
+        elif isinstance(j, ppg.TempFileGeneratingJob):
+            nodes.append(
+                f"job_{counter[0]} = ppg.TempFileGeneratingJob('{counter[0]}', dummy_fg, depend_on_function=False)"
+            )
+        elif isinstance(j, ppg.FileGeneratingJob):
+            nodes.append(
+                f"job_{counter[0]} = ppg.FileGeneratingJob('{counter[0]}', dummy_fg, depend_on_function=False)"
+            )
+        elif isinstance(j, ppg.MultiTempFileGeneratingJob):
+            files = [counter[0] + "/" + x.name for x in j.files]
+            nodes.append(
+                f"job_{counter[0]} = ppg.MultiTempFileGeneratingJob({files!r}, dummy_mfg, depend_on_function=False)"
+            )
+        elif isinstance(j, ppg.MultiFileGeneratingJob):
+            files = [str(counter[0]) + "/" + x.name for x in j.files]
+            nodes.append(
+                f"job_{counter[0]} = ppg.MultiFileGeneratingJob({files!r}, dummy_mfg, depend_on_function=False)"
+            )
+        elif isinstance(j, ppg.DataLoadingJob):
+            nodes.append(
+                f"job_{counter[0]} = ppg.DataLoadingJob('{counter[0]}', lambda: None, depend_on_function=False)"
+            )
+        elif isinstance(j, ppg.AttributeLoadingJob):
+            nodes.append(
+                f"job_{counter[0]} = ppg.AttributeLoadingJob('{counter[0]}', DummyObject(), 'attr_{counter[0]}', lambda: None, depend_on_function=False)"
+            )
+        elif isinstance(j, ppg.JobGeneratingJob):
+            nodes.append(
+                f"job_{counter[0]} = ppg.JobGeneratingJob('{counter[0]}', lambda: None, depend_on_function=False)"
+            )
+
+        else:
+            raise ValueError(j)
+        node_to_counters[node] = counter[0]
+        counter[0] += 1
+        for parent in graph.job_dag.predecessors(node):
+            descend(parent)
+
+    def build_edges(node):
+        for parent in graph.job_dag.predecessors(node):
+            edges.append(
+                f"edges.append(('{node_to_counters[node]}', '{node_to_counters[parent]}'))"
+            )
+            build_edges(parent)
+
+    edges.append("edges = []")
+    for node in graph.jobs:
+        s = list(graph.job_dag.successors(node))
+        if not s:
+            descend(node)
+            build_edges(node)
+    edges.extend(
+        [
+            "for (a,b) in edges:",
+            "    if a in ppg.global_pipegraph.jobs and b in ppg.global_pipegraph.jobs:",
+            "        ppg.global_pipegraph.jobs[a].depends_on(ppg.global_pipegraph.jobs[b])",
+        ]
+    )
+    with open("subgraph_debug.py", "w") as op:
+        lines = """
+class DummyObject:
+    pass
+
+def dummy_smfg(files, prefix):
+    Path(prefix).mkdir(exist_ok=True, parents=True)
+    for f in files:
+        f.write_text("hello")
+
+
+def dummy_mfg(files):
+    for f in files:
+        f.parent.mkdir(exist_ok=True, parents=True)
+        f.write_text("hello")
+
+def dummy_fg(of):
+    of.parent.mkdir(exist_ok=True, parents=True)
+    of.write_text("fg")
+
+""".split(
+            "\n"
+        )
+        lines += nodes
+        lines += edges
+        lines += ["", "ppg.run()", "ppg.run"]
+
+        op.write("\n".join("        " + l for l in lines))
 
 
 class REcoSystem:
@@ -235,12 +365,30 @@ class REcoSystemDumper:
             output_path / "downgraded_packages.json", dump_downgrades, empty_ok=True
         ).depends_on(job_fill_flake)
 
+        def add_to_git(output_path):
+            add(["."], output_path.parent.absolute())  # and flake.nix must be commited
+            output_path.write_text("added")
+
+        ppg2.FileGeneratingJob(
+            output_path / ".cran_track_added", add_to_git
+        ).depends_on(
+            job_fill_flake,
+            job_header,
+            job_downgrades,
+            job_cran,
+            job_bioc_software,
+            job_bioc_experiment,
+            job_bioc_annotation,
+        )
+
         def gen_tests():
             disjoint_package_sets = self.build_disjoint_package_sets(
                 self.package_info["all_packages"]
             )
             test_jobs = []
-            for ii, package_set in enumerate(disjoint_package_sets):
+            for ii, package_set in enumerate(
+                reversed(disjoint_package_sets)
+            ):  # start with the big ones.
                 test_path = (
                     output_path_top_level
                     / "builds"
@@ -270,7 +418,7 @@ class REcoSystemDumper:
 
                 j = (
                     ppg2.FileGeneratingJob(
-                        test_path / "output/done",
+                        test_path / "output/.cran_track_done",
                         run_test,
                         resources=ppg2.Resources.AllCores,
                     )
@@ -284,6 +432,7 @@ class REcoSystemDumper:
                         ]
                     )
                     .depends_on(self._load_header())
+                    .depends_on(ppg2.FunctionInvariant(make_name_safe_for_nix))
                     .depends_on(
                         ppg2.ParameterInvariant(
                             f"{format_date(self.archive_date)}_{ii}", package_set
@@ -333,7 +482,9 @@ class REcoSystemDumper:
 
         def calc():
             # packages, blacklists, etc
-            cran_packages = self.ct.latest_packages_at_date(self.snapshot_date)
+            cran_packages = self.ct.latest_packages_at_date(
+                self.snapshot_date, self.bioc_release.str_version
+            )
             bioc_experiment_packages = self.bioc_release.get_packages(
                 "experiment", self.archive_date
             )
@@ -624,7 +775,7 @@ class REcoSystemDumper:
             (output_path / "generated").mkdir(exist_ok=True)
             if not (output_path / ".git").exists():  # flakes must be git repos
                 subprocess.check_call(["git", "init"], cwd=output_path)
-            add(["."], output_path)  # and flake.nix must be commited
+            # add(["."], output_path)  # and flake.nix must be commited
 
         output_files = []
         res = ppg2.MultiFileGeneratingJob(
@@ -651,27 +802,31 @@ class REcoSystemDumper:
 
     def _write_package(self, name, info, op):
         sha256 = self.get_sha(info["sha_path"] / f"{name}_{info['version']}.sha256")
-        args = [
-            f'name="{name}"',
-            f'version="{info["version"]}"',
-            f'sha256="{sha256}"',
-            "depends=[ " + " ".join(info["depends"]).replace(".", "_") + "]",
+        out = {}
+        out["name"] = name
+        out["version"] = info["version"]
+        out["sha256"] = sha256
+        out["depends"] = [
+            nix_literal(make_name_safe_for_nix(x)) for x in info["depends"]
         ]
-
         for (key, arg) in [
             ("native_build_inputs", "nativeBuildInputs"),
             ("build_inputs", "buildInputs"),
             ("patches", "patches"),
         ]:
             if key in info:
-                args.append(f"{arg} = [" + " ".join(sorted(info[key])) + "]")
-        if "extra_attrs" in info:
-            args.append(f"extra_attrs = {format_nix_value(info['attrs'])}")
+                out[arg] = info[key]
+
+        if "attrs" in info:
+            out["extra_attrs"] = info["attrs"]
+        if "overrideDerivations" in info:
+            out["extra_override_derivations"] = info["overrideDerivations"]
+
         if "needs_x" in info:
-            args.append("requireX=true")
+            out["requireX"] = True
         if "skip_check" in info:
-            args.append("doCheck=false")
-        op.write("{ " + " ".join((x + ";" for x in args)) + "};\n")
+            out["doCheck"] = False
+        op.write(format_nix_value(out) + ";\n")
 
     def dump_cran_packages(self, output_path):
         # snapshot_date = format_date(snapshot_date)
@@ -694,7 +849,7 @@ class REcoSystemDumper:
                         )
                     )
                 )
-                op.write("\n{ self, derive, pkgs, breakpointHook }:\n")
+                op.write("\n{ self, derive, pkgs, breakpointHook, lib, stdenv }:\n")
                 # we use the most common snapshot to save some byte here
                 snapshot_counts = collections.Counter()
                 for name, info in cran_packages.items():
@@ -748,13 +903,11 @@ class REcoSystemDumper:
 
                     self._write_package(name, info, op)
                 op.write("}\n")
-                add(
-                    ["."], output_path.parent.absolute()
-                )  # and flake.nix must be commited
 
         return ppg2.FileGeneratingJob(output_path, gen).depends_on(
             self._load_header(),
             ppg2.FunctionInvariant("_write_package", REcoSystemDumper._write_package),
+            ppg2.FunctionInvariant(make_name_safe_for_nix),
         )
 
     def dump_bioc_packages(self, source, output_path):
@@ -777,7 +930,7 @@ class REcoSystemDumper:
                         )
                     )
                 )
-                op.write("\n{ self, derive, pkgs, breakpointHook }:\n")
+                op.write("\n{ self, derive, pkgs, breakpointHook, lib, stdenv }:\n")
                 op.write(
                     f'let derive2 = derive {{ biocVersion = "{bioc_version}"; }};\n'
                 )
@@ -787,13 +940,11 @@ class REcoSystemDumper:
                     op.write(f" {safe_name} = derive2")
                     self._write_package(name, info, op)
                 op.write("}\n")
-                add(
-                    ["."], output_path.parent.absolute()
-                )  # and flake.nix must be commited
 
         return ppg2.FileGeneratingJob(output_path, gen).depends_on(
             self._load_header(),
             ppg2.FunctionInvariant("_write_package", REcoSystemDumper._write_package),
+            ppg2.FunctionInvariant(make_name_safe_for_nix),
         )
 
     def run_nix_build(self, flake_path, output_path, exit_on_failure=False):
@@ -893,7 +1044,10 @@ class REcoSystemDumper:
   };
 }
 """.replace(
-                "%PACKAGES%", " ".join(packages).replace(".", "_")
+                "%PACKAGES%",
+                " ".join((make_name_safe_for_nix(x) for x in packages)).replace(
+                    ".", "_"
+                ),
             )
         )
         subprocess.check_call(["git", "add", "flake.nix"], cwd=test_flake_path)
@@ -1022,6 +1176,7 @@ def main():
                     break
             else:
                 raise KeyError("Not found")
+    #dump_subgraph_for_debug(ppg2.global_pipegraph)
     ppg2.run()
 
 

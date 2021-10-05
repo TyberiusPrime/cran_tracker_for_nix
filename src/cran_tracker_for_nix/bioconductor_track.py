@@ -35,6 +35,8 @@ from .common import (
     version_to_tuple,
     parse_date,
     format_date,
+    is_nix_literal,
+    nix_literal,
 )
 from . import bioconductor_overrides
 from .bioconductor_overrides import match_override_keys
@@ -585,7 +587,7 @@ class BioconductorRelease:
             default=lambda: [],
             release_info=self.release_info,
         )
-        for what in ["patches", "attrs"]:
+        for what in ["patches", "attrs", "overrideDerivations"]:
             res[what] = match_override_keys(
                 getattr(bioconductor_overrides, what),
                 self.str_version,
@@ -595,11 +597,20 @@ class BioconductorRelease:
             )
         res["patches_by_version"] = bioconductor_overrides.patches_by_package_version
         res["needs_x"] = bioconductor_overrides.needs_x
+        res[
+            "additional_r_dependencies"
+        ] = bioconductor_overrides.additional_r_dependencies.get(self.str_version, {})
         return res
 
     def patch_native_dependencies(self, graph, all_packages, excluded, date):
         # this is here because it's bioc version dependent
         # but it also handles cran packages
+        def repl_dep(n):
+            if "." not in n and (n != "breakpointHook"):
+                return nix_literal(f"pkgs.{n}")
+            else:
+                return nix_literal(n)
+
         errors = []
         for what in ["native_build_inputs", "build_inputs"]:
             nbi = match_override_keys(
@@ -614,10 +625,12 @@ class BioconductorRelease:
                         f"package with {what} but not in graph or excluded: {pkg_name} {date}"
                     )
                     continue
-                all_packages[pkg_name][what] = [
-                    f"pkgs.{n}" if "." not in n and (n != "breakpointHook") else n
-                    for n in deps
-                ]
+                if not isinstance(deps, (list)) and not is_nix_literal(deps):
+                    raise ValueError(nbi, pkg_name, "must be list")
+                if is_nix_literal(deps):
+                    all_packages[pkg_name][what] = deps
+                else:
+                    all_packages[pkg_name][what] = sorted([repl_dep(n) for n in deps])
         skip = match_override_keys(
             bioconductor_overrides.skip_check,
             self.str_version,
@@ -629,8 +642,10 @@ class BioconductorRelease:
         for pkg_name in skip:
             if pkg_name in all_packages:
                 all_packages[pkg_name]["skip_check"] = True
+            else:
+                errors.append(f"{pkg_name} in skip_check, but not in all_packages")
 
-        for what in ["patches", "attrs"]:
+        for what in ["patches", "attrs", "overrideDerivations"]:
             for pkg_name, values in match_override_keys(
                 getattr(bioconductor_overrides, what),
                 self.str_version,
@@ -642,7 +657,8 @@ class BioconductorRelease:
                     errors.append(
                         f"package with {what} but not in graph or excluded: {pkg_name}"
                     )
-                all_packages[pkg_name][what] = values
+                if pkg_name in all_packages:
+                    all_packages[pkg_name][what] = values
 
         for pkg_name, info in all_packages.items():
             key = pkg_name, info["version"]
@@ -652,8 +668,8 @@ class BioconductorRelease:
                 ] = bioconductor_overrides.patches_by_package_version[key]
 
         if errors:
-            print(sorted(all_packages.keys()))
-            print(excluded)
+            #print(sorted(all_packages.keys()))
+            #print(excluded)
             raise ValueError(
                 "\n".join(errors),
             )
@@ -661,7 +677,7 @@ class BioconductorRelease:
         # extra special magic for samtools injecting zlib
         for node in graph.successors("Rsamtools"):
             build_inputs = all_packages[node].get("native_build_inputs", [])
-            build_inputs.append("pkgs.zlib")
+            build_inputs.append(nix_literal("pkgs.zlib"))
             all_packages[node]["native_build_inputs"] = build_inputs
 
         needs_x = set(bioconductor_overrides.needs_x.copy())

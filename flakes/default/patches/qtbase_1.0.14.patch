@@ -1,0 +1,15 @@
+diff --git a/src/Makefile.common b/src/Makefile.common
+index 9850dd9..31ba315 100644
+--- a/src/Makefile.common
++++ b/src/Makefile.common
+@@ -33,6 +33,10 @@ all:
+ 	      -DCMAKE_INSTALL_PREFIX=../src \
+ 	      -DR_INCLUDES=${R_INCLUDE_DIR}; \
+ 	make install
++	# I could not control RPATH via CMake. HELP WANTED!
++	patchelf --set-rpath ${CMAKE_LIBRARY_PATH} qtbase.so
++	find ../inst/local/ -executable -type f -print0 | xargs -0 patchelf --set-rpath ${CMAKE_LIBRARY_PATH} 
++
+ 	cd ../src; \
+ 	echo "tools:::.shlib_objects_symbol_tables()" | \
+           $(R_HOME)/bin/R --vanilla --slave --args `ls *.o`

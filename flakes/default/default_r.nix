@@ -16,24 +16,31 @@ let
     lib.makeOverridable ({ name, version, sha256, depends ? [ ], doCheck ? true
       , requireX ? false, broken ? false, hydraPlatforms ? R.meta.hydraPlatforms
       , nativeBuildInputs ? [ ], buildInputs ? [ ], patches ? [ ], url ? false
-      , extra_attrs ? { } }:
-      buildRPackage ({
-        name = name;
-        version = version;
-        src = fetchurl {
-          inherit sha256;
-          urls = mkUrls (args // { inherit name version; });
-        };
-        inherit doCheck requireX;
-        propagatedBuildInputs = nativeBuildInputs ++ depends;
-        nativeBuildInputs = nativeBuildInputs ++ depends ++ [ R ];
-        additional_buildInputs = buildInputs;
-        patches = patches;
-        meta.homepage = mkHomepage name;
-        meta.platforms = R.meta.platforms;
-        meta.hydraPlatforms = hydraPlatforms;
-        meta.broken = broken;
-      } // extra_attrs));
+      , extra_attrs ? { }, extra_override_derivations ? null }:
+      let
+        rpkg = buildRPackage ({
+          name = name;
+          version = version;
+          src = fetchurl {
+            inherit sha256;
+            urls = mkUrls (args // { inherit name version; });
+          };
+          inherit doCheck requireX;
+          propagatedBuildInputs = nativeBuildInputs ++ depends;
+          nativeBuildInputs = nativeBuildInputs ++ depends ++ [ R ];
+          additional_buildInputs = buildInputs;
+          patches = patches;
+          meta.homepage = mkHomepage name;
+          meta.platforms = R.meta.platforms;
+          meta.hydraPlatforms = hydraPlatforms;
+          meta.broken = broken;
+        } // extra_attrs);
+        outpkg = if extra_override_derivations == null then
+          rpkg
+        else
+          extra_override_derivations rpkg;
+
+      in outpkg);
 
   # Templates for generating Bioconductor and CRAN packages
   # from the name, version, sha256, and optional per-package arguments above
@@ -82,31 +89,36 @@ let
         ];
   };
 
-
   self = _self;
   _self = import ./generated/bioc-packages.nix {
+    inherit stdenv;
     inherit self;
+    inherit lib;
     inherit pkgs;
     inherit breakpointHook;
     derive = deriveBioc;
   } // import ./generated/bioc-annotation-packages.nix {
+    inherit stdenv;
     inherit self;
+    inherit lib;
     inherit pkgs;
     inherit breakpointHook;
     derive = deriveBiocAnn;
   } // import ./generated/bioc-experiment-packages.nix {
+    inherit stdenv;
     inherit self;
+    inherit lib;
     inherit pkgs;
     inherit breakpointHook;
     derive = deriveBiocExp;
-  }
-
-    // import ./generated/cran-packages.nix {
-      inherit self;
-      inherit pkgs;
-      inherit breakpointHook;
-      derive = deriveCran;
-    };
+  } // import ./generated/cran-packages.nix {
+    inherit stdenv;
+    inherit self;
+    inherit lib;
+    inherit pkgs;
+    inherit breakpointHook;
+    derive = deriveCran;
+  };
 
   # tweaks for the individual packages and "in self" follow
 

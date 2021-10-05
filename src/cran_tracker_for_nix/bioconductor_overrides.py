@@ -1,5 +1,15 @@
 from .common import parse_date, format_date, nix_literal
 
+nl = nix_literal
+
+
+def dict_add(*dicts):
+    res = {}
+    for a in dicts:
+        for k, v in a.items():
+            res[k] = v
+    return res
+
 
 def match_override_keys(
     input_dict,
@@ -109,13 +119,15 @@ def _get_last(collector, new_key, default, copy_anyway):
     return last
 
 
-def inherit(collector, new_key, new, remove=None, copy_anyway=False):
+def inherit(collector, new_key, new, remove=None, copy_anyway=False, rewriter=None):
     """
     Inherit the values from the last entry iff
         - copy_anway is set
     or
         - last_key == new_key[0] or last_key[0] == new_key[0]
         ie. the bioconductor version matches
+
+    The rewriter get's passed the copied values, not the new ones
 
     """
     assert isinstance(copy_anyway, bool)
@@ -128,6 +140,8 @@ def inherit(collector, new_key, new, remove=None, copy_anyway=False):
 
     last = _get_last(collector, new_key, lambda: {}, copy_anyway)
     out = last.copy()
+    if rewriter is not None:
+        out = rewriter(out)
     # remove first, fill in then.
     if remove:
         remove = set(remove)
@@ -158,7 +172,8 @@ def inherit_to_dict(inherited):
 
 # all of these follow the following rules for their keys
 comments = {
-    "3.12": """The assert package was renamed assert_, since assert is a reserverd keyword in nix""",
+    "3.10": """The import package was renamed import_, since assert is a reserved keyword in nix""",
+    "3.12": """The assert package was renamed assert_, since assert is a reserved keyword in nix""",
 }
 
 # overrides, default is by date
@@ -435,7 +450,7 @@ inherit(
         "ChIPpeakAnno": "requires BiocInstaller",
         "cudaBayesreg": "build is broken, needs nvcc",
         "doMPI": "build is broken with mpi trouble",
-        "h2o": "tries to download form s3",
+        "h2o": "tries to download from s3",
         "HierO": "can't find BWidget",
         "HilbertVisGUI": "needs OpenCL, not available in nixpkgs 15.09",
         "HiPLARM": "build is broken, and the package never got any updates and was removed in 2017-07-02",
@@ -721,16 +736,103 @@ inherit(  # start anew.
     excluded_packages,
     ("3.10"),  # 2019-10-30
     {
+        "bigGP": "undefined symbol: mpi_universe_size?",
+        "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
         "charm": "deprecated / removed, but still in packages",
+        "clpAPI": "insists on /usr/include and /usr/local/include",
+        "commonsMath": "tries to download jar files",
+        "exifr": "Tries to talk to paleolimbot.github.io",
+        "freetypeharfbuzz": "Downloads from github",
+        "h2o": "tries to download from s3",
+        "h5": "won't find h5c++",
+        "HierO": "can't find BWidget",
+        "kazaam": "mpi trouble",
+        "kmcudaR": "build is broken, needs nvcc",
+        "multiMiR": "talks to multimr.org",
+        "nloptr": "undefined symbol: nlopt_remove_equality_constraints - version mismatch?",
+        "pbdSLAP": "mpi trouble",
+        "permGPU": "build is broken, needs nvcc",
+        "qtbase": "Can't get it to find GL/gl.h",
+        "Rblpapi": "Missing blpaip3",
+        "Rcplex": "'This nix expression requires that the cplex installer is already downloaded to your machine. Get it from IBM:'. Antihermetic",
+        "RcppAPT": "needs APT/Debian system",
+        "RcppArmadillo": "undefined symbol: _ZNKSt13random_device13_M_getentropyEv",
+        "RcppClassic": "hard coded /usr/bin/strip",
+        # "universalmotif": "hard coded /usr/bin/strip",
         "reactable": "only shows up on 2019-11-21",
+        "redux": "needs hiredis, not found in nixpkgs",
+        "regRSM": "undefined symbol: mpi_universe_size?",
+        "RKEELjars": "downloads jars from github",
+        "rlo": "needs python&numpy",
+        "BiocSklearn": "needs python&sklearn",
+        "Rmpi": "undefined symbol: mpi_universe_size?",
+        "rmumps": "needs libseq, can't find in nixpkgs 19.09",
+        "ROracle": "OCI libraries not found",
+        "rpanel": "build broken, wants DISPLAY?",
+        "rphast": "can't find prce_compile / build problems - and disappears on 2020-03-03 anyway",
+        "RQuantLib": "hquantlib ( if that's even the right package) is broken in nixpgks 15.09)",
+        "rsbml": "libsmbl isn't packagd in nixpkg ",
+        "Rsymphony": "can't find SYMPHONY in nixpkgs",
+        "salso": "downloads from dbdahl.github.io",
+        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        "SeqKat": "hard coded /usr/bin/strip",
+        # "stringi": "Wants to download icudt55l.zip",
+        # "stringi": "Wants to download icudt61l.zip",
+        "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
+        "TDA": "cpp template issues",
+        "trio": "requires logiRec 1.6.1",
+        "wrswoR.benchmark": "talks to github during install",
+        "randstr": "queries www.random.org",
+        "interactiveDisplay": "'trying to use CRAN without setting a mirror'",
+        "x12": "'error: argument is of length zero'?",
+        "zonator": "ERROR: hard-coded installation path:. Try after 2020-05-18 with 0.6.0",
+        "mlm4omics": "won't compile with current stan",
+        "Rcwl": "needs cwltool, not available in 20.03",
+        "gpuR": "OpenCL missing?",
+        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
+        "plyranges": "needs tidyselect >=1.0.0 (available 2020-01-28)",
+        "BiocPkgTools": "needs tidyselect >=1.0.0 (available 2020-01-28)",
+        "splatter": "needs checkmate 2.0.0 (available 2020-02-07)",
+        "apcf": "won't find gcs.csv in GDAL_DATA path even though it's there and pcs.csv is being found",
+        "uavRst": "hardcoded installation path",
+        "GeneBook": "attempts to contact github",
+        "traitdataform": "attempts to contact 'https://raw.githubusercontent.com/EcologicalTraitData/ETS/v0.9/ETS.csv'",
+        "googleformr": "attempts to contact docs.google.com",
+        "fulltext": "wants to write into home",
+        "DuoClustering2018": "uses AnnotationHub / net access on install",
+        "TabulaMurisData": "uses AnnotationHub / net access on install",
+        "depmap": "uses AnnotationHub / net access on install",
+        "bodymapRat": "uses AnnotationHub / net access on install",
+        "benchmarkfdrData2019": "uses AnnotationHub / net access on install",
+        "HDCytoData": "uses AnnotationHub / net access on install",
+        "HMP16SData": "uses AnnotationHub / net access on install",
+        "RNAmodR": "uses AnnotationHub / net access on install",
+        "FlowSorted.CordBloodCombined.450k": "uses AnnotationHub / net access on install",
+        "muscData": "uses AnnotationHub / net access on install",
     },
 )
+inherit(
+    excluded_packages, ("3.10", "2019-11-08"), {}, ["trio"]
+)  # see above for logiRec
 inherit(excluded_packages, ("3.10", "2019-11-21"), {}, ["reactable"])
+inherit(
+    excluded_packages, ("3.10", "2019-12-30"), {}, ["uavRst"]
+)  # update, might start to work
+inherit(
+    excluded_packages, ("3.10", "2020-01-28"), {}, ["plyranges", "BiocPkgTools"]
+)  # see above for tidyselect
+inherit(
+    excluded_packages, ("3.10", "2020-02-07"), {}, ["splatter"]
+)  # see above for checkmate
+
 
 inherit(
     excluded_packages,
     ("3.10", "2020-03-03"),
-    {"rphast": "removed from CRAN on 2020-03-03, but dependencies were not removed"},
+    {
+        "rphast": "removed from CRAN on 2020-03-03, but dependencies were not removed",
+        "h2o": "tries to download from s3",
+    },
 )
 
 
@@ -742,6 +844,8 @@ inherit(  # start anew.
         "MTseeker": "deprecated / removed, but still in packages",
         "RIPSeeker": "deprecated / removed, but still in packages",
         "rtfbs": "requeries rphast, which was removed from CRAN on 2020-03-03",
+        "qtbase": "Can't get it to find GL/gl.h",
+        "zonator": "ERROR: hard-coded installation path:. Try after 2020-05-18 with 0.6.0",
     },
 )
 inherit(  # start anew.
@@ -750,7 +854,13 @@ inherit(  # start anew.
     {
         "parcor": "missing ppls",  # check date
     },
-),
+)
+inherit(  # start anew.
+    excluded_packages,
+    ("3.11", "2020-05-18"),
+    {},
+    ["zonator"],
+)
 
 
 inherit(  # start anew. - 2020-10-28
@@ -772,6 +882,7 @@ inherit(  # start anew. - 2020-10-28
         "spsComps": "released later on 2021-02-26",
         "spatstat.geom": "released later on 2021-01-16",
         "parcor": "missing ppls",
+        "qtbase": "Can't get it to find GL/gl.h",
         # "ppls": "removed from CRAN, but groc still suggests it",
     },
 )
@@ -798,6 +909,7 @@ inherit(  # start anew.
         "bigmemoryExtras": "deprecated, but still in PACKAGES.gz",
         "yulab.utils": "show up on 2021-08-17",
         "ggfun": "show up on ",
+        "qtbase": "Can't get it to find GL/gl.h",
     },
 )
 
@@ -897,6 +1009,9 @@ additional_r_dependencies = {
             # "ChemmineR": ["gridExtra"]
         },
     },
+    "3.10": {
+        "cran": {"RBesT": ["rstantools"]},
+    },
 }
 
 
@@ -944,7 +1059,6 @@ inherit(
         "gmp": ["gmp"],
         "gsl": ["gsl"],
         "HiCseg": ["gsl"],
-        # "HilbertVisGUI": ["pkgconfig", "opencl-headers"],
         "iBMQ": ["gsl"],
         "igraph": ["gmp"],
         "JavaGD": ["jdk"],
@@ -1040,7 +1154,6 @@ inherit(
         "RProtoBuf": ["protobuf"],
         "rpud": ["pkgs.linuxPackages.nvidia_x11"],
         "rPython": ["python"],
-        "RQuantLib": ["hquantlib"],
         "Rsamtools": ["zlib"],
         "RSclient": ["openssl"],
         "Rserve": ["openssl"],
@@ -1070,9 +1183,10 @@ inherit(
         "sprint": ["openmpi"],
         "ssanv": ["proj"],
         "STARSEQ": ["zlib"],
+        "stringi": ["pkgs.icu.dev"],
         "stsm": ["gsl"],
         "survSNP": ["gsl"],
-        "sysfonts": ["zlib", "libpng", "freetype"],
+        "sysfonts": ["pkgconfig", "zlib", "libpng", "freetype"],
         "TAQMNGR": ["zlib"],
         "tiff": ["libtiff"],
         "tkrplot": ["pkgs.xlibs.libX11"],
@@ -1272,21 +1386,206 @@ inherit(
         "Segmentor3IsBack": ["which"],
         "ARRmData": ["which"],
         "dummy": ["which"],
+        "qtbase": ["qt4", "cmake", "(lib.getDev pkgs.libGL)"],
     },
     ["birte"],
     copy_anyway=True,
 )
 
-inherit(native_build_inputs, "3.10", {}, ["rMAT"], copy_anyway=True)
+
+def handle_renames(lookup):
+    def fix(input):
+        output = {}
+        for k, v in input.items():
+            output[k] = [lookup.get(x, x) for x in v]
+        return output
+
+    return fix
+
+
+inherit(
+    native_build_inputs,
+    "3.10",
+    {
+        "AMOUNTAIN": ["gsl_1"],
+        "apcf": ["gdal_2", "geos"],
+        "BALD": ["jags", "pcre", "lzma", "bzip2", "zlib", "icu"],
+        "ijtiff": ["libtiff"],
+        "bbl": ["gsl_1"],
+        "bio3d": ["zlib"],
+        "cairoDevice": ["gtk2", "pkgconfig"],
+        "Cairo": [
+            "pkgconfig",
+            "libtiff",
+            "libjpeg",
+            "cairo",
+            "x11",
+            "fontconfig",
+        ],
+        "cld3": ["protobuf"],
+        "data.table": ["zlib"],
+        "DRIP": ["gsl_1"],
+        "fftw": ["pkgconfig", "pkgs.fftw.dev"],
+        "fftwtools": ["pkgs.fftw.dev"],
+        "flowPeaks": ["gsl_1"],
+        "fRLR": ["gsl_1"],
+        "gaston": ["zlib"],
+        "gdalcubes": ["pkgconfig", "gdal", "proj", "curl", "sqlite"],
+        "gdtools": ["cairo", "pkgconfig"],
+        "gpg": ["gpgme"],
+        "gsl": ["gsl"],  # might need 2?
+        # "h5": ["hdf5"],
+        "haven": ["zlib"],
+        "hdf5r": ["hdf5"],
+        "HilbertVisGUI": ["pkgconfig", "opencl-headers", "gtkmm2"],
+        "hipread": ["zlib"],
+        "hSDM": ["gsl_1"],
+        "keyring": ["pkgconfig", "pkgs.openssl", "pkgs.openssl.out"],
+        "JMcmprsk": ["gsl_1"],
+        "jqr": ["jq"],
+        "KFKSDS": ["pkgconfig", "gsl_1"],
+        "kmcudaR": ["cudatoolkit"],
+        "KSgeneral": ["pkgconfig", "fftw"],
+        "LCMCR": ["gsl_1"],
+        "Libra": ["gsl_1"],
+        "magick": ["imagemagick"],
+        "mongolite": [
+            "pkgconfig",
+            "pkgs.openssl.dev",
+            "pkgs.openssl.out",
+            "pkgs.cyrus_sasl.out",
+            "zlib",
+        ],
+        "mvst": ["gsl_1"],
+        "mwaved": ["pkgconfig", "fftw"],
+        "odbc": ["libiodbc"],
+        "opencv": ["opencv3"],
+        "openssl": ["pkgs.openssl", "pkgs.openssl.out"],
+        "pdftools": ["poppler", "pkgconfig"],
+        "permGPU": ["cudatoolkit"],
+        "poisbinom": ["fftw"],
+        "protolite": ["protobuf"],
+        "psbcGroup": [
+            "fftw",
+            "gsl_1",
+        ],
+        "qpdf": ["libjpeg"],
+        "ragg": ["freetype", "pkgconfig", "libpng", "libtiff"],
+        "Rbowtie": ["zlib"],
+        "Rbowtie2": ["zlib"],
+        "RcppCWB": ["pcre", "glib", "pkgconfig", "ncurses"],
+        "RcppMeCab": ["mecab"],
+        "RmecabKo": ["mecab"],
+        "rtmpt": ["gsl_1"],
+        "RCurl": ["pkgconfig", "curl"],
+        "RGtk2": ["pkgconfig", "pkgs.gtk2.dev"],
+        "Rhdf5lib": ["zlib"],
+        "Rhtslib": ["zlib", "bzip2", "lzma", "curl"],
+        "RMariaDB": ["zlib", "pkgs.mysql.connector-c", "openssl"],
+        "Rmpi": ["openmpi"],
+        "RMySQL": ["zlib", "pkgs.mysql.connector-c", "openssl"],
+        "RODBC": ["libiodbc"],
+        "RPostgres": ["pkgconfig", "postgresql"],
+        "rPython": ["which", "python"],
+        "rrd": ["pkgconfig", "rrdtool"],
+        "rscala": ["scala"],
+        "rtk": ["zlib"],
+        "s2": ["pkgconfig", "openssl"],
+        "sbrl": ["gsl_1", "gmp"],
+        "scModels": ["mpfr"],
+        "sf": ["gdal_2", "proj", "pkgconfig", "sqlite", "geos"],
+        "ssh": ["libssh"],
+        "tesseract": ["tesseract", "leptonica"],
+        "spate": ["pkgconfig", "fftw"],
+        "specklestar": ["fftw"],
+        "systemfonts": ["fontconfig"],
+        "tkrplot": ["tk"],
+        "udunits2": ["udunits", "expat"],
+        "ulid": ["zlib"],
+        "units": ["udunits"],
+        "unrtf": ["pcre", "lzma", "bzip2", "zlib", "icu"],
+        "V8": ["v8"],
+        "vapour": ["gdal"],
+        "websocket": ["openssl"],
+        "writexl": ["zlib"],
+        "xslt": ["pkgconfig", "libxslt"],
+        "SnakeCharmR": ["python"],
+        "bioacoustics": ["cmake", "fftw", "soxr"],
+        "infercnv": ["python"],
+        "rgl": ["libGLU", "mesa", "x11"],
+        "gpuR": ["cudatoolkit"],
+        "vcfR": ["zlib"],
+        # "Rcwl": ["cwltool"],
+        "netboost": ["perl"],
+        "Rsampletrees": ["gsl_1"],
+        "rsvg": ["librsvg", "pkgconfig"],
+        "redland": ["redland", "pkgconfig", "librdf_raptor2", "librdf_rasqal"],
+        "SICtools": ["ncurses"],
+        "RJMCMCNucleosomes": ["gsl_1"],
+        "universalmotif": ["binutils"],
+        "landsepi": ["gsl_1"],
+        "ROpenCVLite": ["cmake"],
+        "gert": ["libgit2"],
+    },
+    # "affyio": ["zlib"],
+    # # "BayesSAE": ["gsl_1"],
+    # "coga": ["gsl_1"],
+    # # "coga": ["gsl_1"],
+    # "devEMF": ["zlib", "pkgs.xlibs.libXft.dev", "x11"],
+    # "diversitree": ["gsl_1", "fftw"],
+    # # does this help?
+    # "git2r": [ "pkgs.zlib.dev", "pkgs.openssl.dev", "pkgs.libssh2.dev", "libgit2", "pkgconfig", ],
+    # # "GLAD": ["gsl_1"],
+    # "gmp": ["pkgs.gmp.dev"],
+    # # "HiCseq": ["gsl_1"],
+    # # "hSDM": ["gsl_1"],
+    # "KSgeneral": ["gsl_1", "pkgconfig"],
+    # "PKI": ["pkgs.openssl.dev"],
+    # "PopGenome": ["zlib"],
+    # "R2SWF": ["pkgconfig", "zlib", "libpng", "freetype"],
+    # # "Rcplex": ["cplex"],
+    # # "RcppZiggurat": ["gsl_1"],
+    # "rgdal": ["pkgs.proj.dev", "gdal"],
+    # "Rglpk": ["glpk"],
+    # "RKHSMetaMod": ["gsl_1"],
+    # # "Rlibeemd": ["gsl_1"],
+    # # "SemiCompRisks": ["gsl_1"],
+    # "seqinr": ["zlib"],
+    # "seqminer": ["zlib"],
+    # "seqTools": ["zlib"],
+    # "showtext": ["pkgconfig", "zlib", "libpng", "freetype", "icu"],
+    # # "simplexreg": ["gsl_1"],
+    # "snpStats": ["zlib"],
+    # "spate": ["fftw"],
+    # # "stsm": ["gsl_1"],
+    # "sysfonts": ["pkgconfig", "zlib", "libpng", "freetype"],
+    # "TAQMNGR": ["pkgs.zlib.dev"],
+    # "ulid": ["zlib"],
+    # "unrtf": ["bzip2", "zlib", "lzma", " pcre"],
+    # "XBRL": ["zlib", "pkgs.libxml2.dev"],
+    # "xml2": nl( "[pkgs.libxml2.dev] ++ lib.optionals stdenv.isDarwin [ pkgs.perl ]"),
+    # "XML": ["libtool", "pkgs.libxml2.dev", "xmlsec", "libxslt"],
+    # "XML": ["libtool", "pkgs.libxml2.dev", "xmlsec", "libxslt"],
+    # "XVector": ["zlib"],
+    # },
+    ["rMAT", "rphast"],
+    copy_anyway=True,
+    rewriter=handle_renames(
+        {
+            "gsl": "gsl_1",
+            "openssl": "pkgs.openssl.dev",
+            "libtiff": "pkgs.libtiff.dev",
+        }
+    ),
+)
 inherit(
     native_build_inputs,
     "3.11",
     {
-        "qtbase": ["qt4", "cmake"],
+        "RMySQL": ["zlib", "libmysqlclient"],
     },
     [
         "rpg",
-        "rphast",
         "rPython",
         "rTANDEM",
         "rtfbs",
@@ -1435,7 +1734,46 @@ inherit(
 inherit(build_inputs, "3.7", {}, [], copy_anyway=True)
 inherit(build_inputs, "3.8", {}, ["flowQ"], copy_anyway=True)
 inherit(build_inputs, "3.9", {}, [], copy_anyway=True)
-inherit(build_inputs, "3.10", {}, [], copy_anyway=True)
+inherit(
+    build_inputs,
+    "3.10",
+    {
+        "tikzDevice": ["which", "pkgs.texlive.combined.scheme-medium"],
+        "openssl": ["pkgconfig", "pkgs.openssl.out"],
+        "tesseract": ["pkgconfig"],
+        "redland": ["pkgconfig"],
+        "landsepi": ["gsl_1"],
+        # "BayesSAE": ["gsl_1"],
+        # "BayesVarSel": ["gsl_1"],
+        # "ChemmineOB": ["openbabel", "pkgconfig"],  # experimental
+        # "cld3": ["pkgconfig", "protobuf"],
+        # "curl": ["pkgconfig"],
+        # "fftwtools": ["pkgconfig"],
+        # "HilbertVisGUI": ["pkgconfig"],
+        # "KFKSDS": ["gsl_1"],
+        # "KSgeneral": ["pkgconfig"],
+        # "Libra": ["gsl_1"],
+        # "PKI": ["openssl"],
+        # "PopGenome": ["zlib"],
+        # "R2SWF": ["pkgconfig", "zlib", "libpng", "freetype"],
+        # "Rsubread": ["zlib"],
+        # "SemiCompRisks": ["gsl_1"],
+        # "showtext": ["pkgconfig", "zlib", "libpng", "freetype", "icu"],
+        # "stsm": ["gsl_1"],
+        # "sysfonts": ["pkgconfig", "zlib", "libpng", "freetype"],
+        # "TAQMNGR": ["gsl_1"],
+        # "RcppZiggurat": ["gsl_1"],
+        # "Rglpk": ["glpk"],
+        # "RMySQL": ["zlib", "pkgs.mysql.connector-c", "openssl"],
+        # "curl": ["pkgconfig", "curl"],
+        # "fftwtools": ["pkgs.fftw.dev"],
+        # "BALD": ["jags"],
+        # "RODBC": ["libiodbc"],
+        # "Rhtslib": ["zlib"],
+    },
+    [],
+    copy_anyway=True,
+)
 inherit(
     build_inputs,
     "3.11",
@@ -1459,6 +1797,7 @@ build_inputs = inherit_to_dict(build_inputs)
 
 
 skip_check = []
+# in R names please, not the safe_for_nix names
 inherit_list(
     skip_check,
     "3.0",
@@ -1479,6 +1818,25 @@ inherit_list(
 )  # tries to run MPI processes
 inherit_list(skip_check, "3.1", ["pbdMPI"], [], copy_anyway=True)
 inherit_list(skip_check, "3.2", ["pbdSLAP"], [], copy_anyway=True)
+inherit_list(skip_check, "3.3", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.4", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.5", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.6", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.7", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.8", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.9", [], [], copy_anyway=True)
+inherit_list(
+    skip_check,
+    "3.10",
+    [
+        "RNAmodR.Data",
+    ],
+    ['gmatrix','sprint'],
+    copy_anyway=True,
+)  # MPI
+inherit_list(skip_check, "3.11", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.12", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.13", [], [], copy_anyway=True)
 
 
 skip_check = inherit_to_dict(skip_check)
@@ -1514,6 +1872,14 @@ needs_x = set(  # let's presume they never go from 'need X' no 'not need X'
         "spatsurv",
         "ProbForecastGOP",
         "GeoGenetix",
+        "soptdmaeA",
+        "magick",
+        "optbdmaeAT",  # igraph?
+        "optrcdmaeAT",  # igraph?
+        "rMouse",
+        "hierO",  # if it still doesn't work, exclude..
+        "loon",
+        "rgl",
     ]
 )
 
@@ -1522,20 +1888,20 @@ inherit(
     patches,
     "3.0",
     {
-        "BayesBridge": ["./../patches/BayesBridge.patch"],
-        "bayesLogit": ["./../patches/BayesLogit.patch"],
-        "BayesXsrc": ["./../patches/BayesXsrc.patch"],
-        "CARramps": ["./../patches/CARramps.patch"],
-        "EMCluster": ["./../patches/EMCluster.patch"],
-        "gmatrix": ["./../patches/gmatrix.patch"],
-        "gputools": ["./../patches/gputools.patch"],
-        "iFes": ["./../patches/iFes.patch"],
-        "qtbase": ["./../patches/qtbase.patch"],
-        "RAppArmor": ["./../patches/RAppArmor.patch"],
-        "rpud": ["./../patches/rpud.patch"],
-        "RServe": ["./../patches/Rserve.patch"],
-        "spMC": ["./../patches/spMC.patch"],
-        "WideLM": ["./../patches/WideLM.patch"],
+        "BayesBridge": [nl("./../patches/BayesBridge.patch")],
+        "bayesLogit": [nl("./../patches/BayesLogit.patch")],
+        "BayesXsrc": [nl("./../patches/BayesXsrc.patch")],
+        "CARramps": [nl("./../patches/CARramps.patch")],
+        "EMCluster": [nl("./../patches/EMCluster.patch")],
+        "gmatrix": [nl("./../patches/gmatrix.patch")],
+        "gputools": [nl("./../patches/gputools.patch")],
+        "iFes": [nl("./../patches/iFes.patch")],
+        "qtbase": [nl("./../patches/qtbase.patch")],
+        "RAppArmor": [nl("./../patches/RAppArmor.patch")],
+        "rpud": [nl("./../patches/rpud.patch")],
+        "RServe": [nl("./../patches/Rserve.patch")],
+        "spMC": [nl("./../patches/spMC.patch")],
+        "WideLM": [nl("./../patches/WideLM.patch")],
     },
 )
 
@@ -1543,7 +1909,7 @@ inherit(
     patches,
     ("3.0", "2015-01-11"),
     {
-        "RMySQL": ["./../patches/RMySQL.patch"],
+        "RMySQL": [nl("./../patches/RMySQL.patch")],
     },
 )
 
@@ -1552,15 +1918,15 @@ inherit(
     patches,
     "3.1",
     {
-        "qtbase": ["./../patches/qtbase.patch"],
-        "RMySQL": ["./../patches/RMySQL.patch"],
+        "qtbase": [nl("./../patches/qtbase.patch")],
+        "RMySQL": [nl("./../patches/RMySQL.patch")],
     },
 )
 inherit(
     patches,
     ("3.1", "2015-05-29"),
     {
-        "qtbase": ["./../patches/qtbase_1.0.9.patch"],
+        "qtbase": [nl("./../patches/qtbase_1.0.9.patch")],
     },  # bc 3.1
 )
 inherit(patches, ("3.1", "2015-10-01"), {}, ["RMySQL"])
@@ -1569,10 +1935,36 @@ inherit(
     patches,
     "3.2",
     {
-        "qtbase": ["./../patches/qtbase_1.0.9.patch"],
+        "qtbase": [nl("./../patches/qtbase_1.0.9.patch")],
     },
 )
-
+inherit(patches, "3.3", {}, copy_anyway=True)
+inherit(patches, "3.4", {}, copy_anyway=True)
+inherit(patches, "3.5", {}, copy_anyway=True)
+inherit(patches, "3.6", {}, copy_anyway=True)
+inherit(patches, "3.7", {}, copy_anyway=True)
+inherit(patches, "3.8", {}, copy_anyway=True)
+inherit(patches, "3.9", {}, copy_anyway=True)
+inherit(
+    patches,
+    "3.10",
+    {
+        "qtbase": [nl("./../patches/qtbase_1.0.14.patch")],
+        "Rhdf5lib": [nl("./../patches/Rhdf5lib.patch")],
+        "redland": [nl("./../patches/redland.patch")],
+        "tesseract": [nl("./../patches/tesseract.patch")],
+        "mongolite": [nl("./../patches/mongolite.patch")],
+    },
+    copy_anyway=True,
+)
+inherit(
+    patches,
+    "3.11",
+    {},
+    copy_anyway=True,
+)
+inherit(patches, "3.12", {}, copy_anyway=True)
+inherit(patches, "3.13", {}, copy_anyway=True)
 # inherit(
 # patches,
 # ("3.1", "2015-10-01"),
@@ -1585,81 +1977,84 @@ patches = inherit_to_dict(patches)
 patches_by_package_version = {}
 
 attrs = []
-shebangs = {"patchPhase": "patchShebangs configure"}
+shebangs = {"postPatch": "patchShebangs configure"}
 
 inherit(
     attrs,
     "3.0",
     {
-        "RcppArmadillo": shebangs,
-        "rpf": shebangs,
-        "xml2": {
-            "preConfigure": "export LIBXML_INCDIR=${pkgs.libxml2}/include/libxml2"
-        },
-        "curl": {"preConfigure": "export CURL_INCLUDES=${pkgs.curl}/include"},
-        "iFes": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
-        "rJava": {
-            "preConfigure": """
-                export JAVA_CPPFLAGS=-I${pkgs.jdk}/include/
-                export JAVA_HOME=${pkgs.jdk}
-        """
-        },
-        "SJava": {
-            "preConfigure": """
-        export JAVA_CPPFLAGS=-I${pkgs.jdk}/include
-        export JAVA_HOME=${pkgs.jdk}
-      """
-        },
-        "JavaGD": {
-            "preConfigure": """
-        export JAVA_CPPFLAGS=-I${pkgs.jdk}/include/
-        export JAVA_HOME=${pkgs.jdk}
-      """
-        },
-        "Mposterior": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
-        "Rmpi": {"configureFlags": ["--with-Rmpi-type=OPENMPI"]},
-        "Rmpfr": {"configureFlags": ["--with-mpfr-include=${pkgs.mpfr}/include"]},
-        "RVowpalWabbit": {
-            "configureFlags": [
-                "--with-boost=${pkgs.boost.dev}",
-                "--with-boost-libdir=${pkgs.boost.lib}/lib",
-            ],
-        },
-        "RAppArmor": {"LIBAPPARMOR_HOME": "${pkgs.libapparmor}"},
-        "RMySQL": {"MYSQL_DIR": "${pkgs.mysql.lib}"},
-        "devEMF": {"NIX_CFLAGS_LINK": "-L${pkgs.xlibs.libXft}/lib -lXft"},
-        "slfm": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
-        "SamplerCompare": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
-        "gputools": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
-        # It seems that we cannot override meta attributes with overrideDerivation.
         "CARramps": {
             "hydraPlatforms": "stdenv.lib.platforms.none",
             "configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"],
         },
+        "curl": {"preConfigure": "export CURL_INCLUDES=${pkgs.curl}/include"},
+        "devEMF": {"NIX_CFLAGS_LINK": "-L${pkgs.xlibs.libXft}/lib -lXft"},
         "gmatrix": {
             "CUDA_LIB_PATH": "${pkgs.cudatoolkit}/lib64",
             "R_INC_PATH": "${pkgs.R}/lib/R/include",
             "CUDA_INC_PATH": "${pkgs.cudatoolkit}/usr_include",
         },
-        # It seems that we cannot override meta attributes with overrideDerivation.
-        "rpud": {
-            "hydraPlatforms": nix_literal("stdenv.lib.platforms.none"),
-            "CUDA_HOME": "${pkgs.cudatoolkit}",
+        "gputools": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
+        "iFes": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
+        "JavaGD": {
+            "preConfigure": """
+        export JAVA_CPPFLAGS=-I${pkgs.jdk}/include/
+        export JAVA_HOME=${pkgs.jdk}
+        """
         },
-        "WideLM": {"configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"]},
-        "openssl": {"OPENSSL_INCLUDES": "${pkgs.openssl}/include"},
-        "Rserve": {"configureFlags": ["--with-server" "--with-client"]},
+        # It seems that we cannot override meta attributes with overrideDerivation.
+        "Mposterior": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
         "nloptr": {
             "configureFlags": [
                 "--with-nlopt-cflags=-I${pkgs.nlopt}/include"
                 "--with-nlopt-libs='-L${pkgs.nlopt}/lib -lnlopt_cxx -lm'"
             ]
         },
+        "openssl": {
+            "OPENSSL_INCLUDES": "${pkgs.openssl}/include",
+            "LD_LIBRARY_PATH": "${pkgs.openssl.out}/lib;",
+        },
+        "RAppArmor": {"LIBAPPARMOR_HOME": "${pkgs.libapparmor}"},
+        "RcppArmadillo": shebangs,
+        "rJava": {
+            "preConfigure": """
+                export JAVA_CPPFLAGS=-I${pkgs.jdk}/include/
+                export JAVA_HOME=${pkgs.jdk}
+        """
+        },
+        "Rmpfr": {"configureFlags": ["--with-mpfr-include=${pkgs.mpfr}/include"]},
+        "Rmpi": {"configureFlags": ["--with-Rmpi-type=OPENMPI"]},
+        "RMySQL": {"MYSQL_DIR": "${pkgs.mysql.lib}"},
+        "rpf": shebangs,
+        "rpud": {
+            "hydraPlatforms": nl("stdenv.lib.platforms.none"),
+            "CUDA_HOME": "${pkgs.cudatoolkit}",
+        },
+        "Rserve": {"configureFlags": ["--with-server" "--with-client"]},
+        "RVowpalWabbit": {
+            "configureFlags": [
+                "--with-boost=${pkgs.boost.dev}",
+                "--with-boost-libdir=${pkgs.boost}/lib",
+            ],
+        },
+        "SamplerCompare": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
+        "slfm": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
+        "SJava": {
+            "preConfigure": """
+        export JAVA_CPPFLAGS=-I${pkgs.jdk}/include
+        export JAVA_HOME=${pkgs.jdk}
+        """
+        },
         "V8": {
             "preConfigure": "export V8_INCLUDES=${pkgs.v8}/include",
         },
+        "WideLM": {"configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"]},
+        "xml2": {
+            "preConfigure": "export LIBXML_INCDIR=${pkgs.libxml2}/include/libxml2"
+        },
     },
 )
+inherit(attrs, "3.1", {}, copy_anyway=True)
 inherit(
     attrs,
     ("3.1", "2015-05-28"),
@@ -1673,7 +2068,7 @@ inherit(
         "curl": shebangs,
         "Rblpapi": shebangs,
         "xml2": shebangs,
-        "RMySQL": shebangs,
+        "RMySQL": dict_add(shebangs, {"MYSQL_DIR": "${pkgs.mysql.connector-c}"}),
     },
 )
 
@@ -1683,7 +2078,13 @@ inherit(
     {
         "Rsomoclu": shebangs,
         "mongolite": shebangs,
-        "openssl": shebangs,
+        "openssl": dict_add(
+            shebangs,
+            {
+                "OPENSSL_INCLUDES": "${pkgs.openssl}/include",
+                "LD_LIBRARY_PATH": "${pkgs.openssl.out}/lib;",
+            },
+        ),
     },
     copy_anyway=True,
 )
@@ -1693,11 +2094,150 @@ inherit(
     {
         "gdtools": shebangs,
     },
+    ["CARramps", "rpud", "WideLM"],
 )
-
-
+inherit(attrs, "3.3", {}, copy_anyway=True)
+inherit(attrs, "3.4", {}, copy_anyway=True)
+inherit(attrs, "3.5", {}, copy_anyway=True)
+inherit(attrs, "3.6", {}, copy_anyway=True)
+inherit(attrs, "3.7", {}, copy_anyway=True)
+inherit(attrs, "3.8", {}, copy_anyway=True)
+inherit(attrs, "3.9", {}, copy_anyway=True)
+inherit(
+    attrs,
+    "3.10",
+    {
+        "acs": shebangs,
+        "arrow": shebangs,
+        "av": shebangs,
+        "BALD": {
+            "JAGS_INCLUDE": "${pkgs.jags}/include/JAGS",
+            "JAGS_LIB": "${pkgs.jags}/lib",
+        },
+        "Cairo": {
+            "NIX_LDFLAGS": "-lfontconfig",
+        },
+        "cld3": shebangs,
+        "DeLorean": shebangs,
+        "freetypeharfbuzz": shebangs,
+        "gifski": shebangs,
+        "gert": shebangs,
+        "gpg": shebangs,
+        "ijtiff": shebangs,
+        "keyring": shebangs,
+        "jqr": shebangs,
+        "JuniperKernel": shebangs,
+        "lpsymphony": shebangs,
+        "magick": shebangs,
+        "mongolite": dict_add(
+            shebangs,
+            {
+                "PKGCONFIG_CFLAGS": "-I${pkgs.openssl.dev}/include -I${pkgs.cyrus_sasl.dev}/include -I${pkgs.zlib.dev}/include",
+                "PKGCONFIG_LIBS": "-Wl,-rpath,${pkgs.openssl.out}/lib -L${pkgs.openssl.out}/lib -L${pkgs.cyrus_sasl.out}/lib -L${pkgs.zlib.out}/lib -lssl -lcrypto -lsasl2 -lz",
+            },
+        ),
+        "odbc": shebangs,
+        "opencv": shebangs,
+        # "openssl": { "OPENSSL_INCLUDES": "${pkgs.openssl}/include", "LD_LIBRARY_PATH": '"${pkgs.openssl.out}/lib";', },
+        "openssl": dict_add(
+            shebangs,
+            {
+                "PKGCONFIG_CFLAGS": "-I${pkgs.openssl.dev}/include",
+                "PKGCONFIG_LIBS": "-Wl,-rpath,${pkgs.openssl.out}/lib -L${pkgs.openssl.out}/lib -lssl -lcrypto",
+            },
+        ),
+        "pdftools": shebangs,
+        "protolite": shebangs,
+        "ps": shebangs,
+        "RcppCWB": shebangs,
+        "RcppGetconf": shebangs,
+        "RcppParallel": shebangs,
+        "rDEA": shebangs,  # experimental
+        "redland": shebangs,
+        "redux": shebangs,
+        "Rglpk": shebangs,  # experimental
+        "RMariaDB": shebangs,
+        "ROpenCVLite": shebangs,
+        "rpg": shebangs,
+        "RPostgres": shebangs,
+        "rrd": shebangs,
+        "rsvg": shebangs,
+        "rzmq": shebangs,
+        "SICtools": {
+            "postPatch": """
+substituteInPlace src/Makefile \
+      --replace "CFLAGS = " "CFLAGS = -I${pkgs.ncurses.dev}/include " \
+      --replace "LDFLAGS = " "LDFLAGS = -L${pkgs.ncurses.out}/lib " \
+      --replace "-lcurses" "-lncurses"
+      """
+        },
+        "sodium": shebangs,
+        "strex": shebangs,
+        # "sysfonts": {"strictDeps": False},
+        "systemfonts": shebangs,
+        "tesseract": shebangs,
+        "universalmotif": {
+            "postPatch": 'substituteInPlace src/Makevars --replace "/usr/bin/strip" "strip"',
+        },
+        "V8": {
+            "postPatch": 'substituteInPlace configure --replace " -lv8_libplatform" ""',
+            "preConfigure": """
+        export INCLUDE_DIR=${pkgs.v8}/include
+        export LIB_DIR=${pkgs.v8}/lib
+        patchShebangs configure
+      """,
+        },
+        "websocket": {
+            "PKGCONFIG_CFLAGS": "-I${pkgs.openssl.dev}/include",
+            "PKGCONFIG_LIBS": "-Wl,-rpath,${pkgs.openssl.out}/lib -L${pkgs.openssl.out}/lib -lssl -lcrypto",
+        },
+        "x13binary": shebangs,
+        "xslt": shebangs,
+        # "apcf": { # won't find gcsv.csv, even though it's in GDAL_DATA path and
+        # it is finding pcs.csv in that same path, and it claims to be looking in that path
+        #     "GDAL_CONFIG": "${pkgs.gdal}/bin/gdal-config",
+        #     "GDAL_DATA": "$pkgs.gdal_2/share/gdal/",
+        #     "PROJ_LIB": "$pkgs.proj/out",
+        # },
+        # "rphast": { # for documentation - Still misses pcre_compile
+        # "preInstall": """
+        # export CPPFLAGS="-I ${pkgs.pcre.dev}/include"
+        # """, },
+        # "AnnotationHub": {
+        # "postInstall": "R --no-save -e 'library(AnnotationHub);AnnotationHub(localHub=F)'"
+        # },
+        # "ExperimentHub": {
+        # "postInstall": "R --no-save -e 'library(ExperimentHub);ExperimentHub(localHub=F)'"
+        # },
+    },
+    ["iFes", "SJava", "Mposterior", "gputools", "gmatrix"],
+    copy_anyway=True,
+)
+inherit(attrs, "3.11", {}, ["glpkAPI"], copy_anyway=True)
+inherit(attrs, "3.12", {}, copy_anyway=True)
+inherit(attrs, "3.13", {}, copy_anyway=True)
 attrs = inherit_to_dict(attrs)
 
+overrideDerivations = []
+inherit(
+    overrideDerivations,
+    "3.10",
+    {
+        "data.table": nl(
+            """old: old // {
+                    NIX_CFLAGS_COMPILE = old.NIX_CFLAGS_COMPILE + lib.optionalString stdenv.isDarwin " -fopenmp";
+                    }
+                """
+        ),
+        "glpkAPI": nl(  # GLPK in nix is too old?
+            """old: old // {
+                    NIX_CFLAGS_COMPILE = old.NIX_CFLAGS_COMPILE + "--enable-gmp=no";
+                    }"""
+        ),
+    },
+)
+
+overrideDerivations = inherit_to_dict(overrideDerivations)
 
 # dates at which we also need to build the r_eco_system
 # build from above
@@ -1713,6 +2253,7 @@ for adict in (
     skip_check,
     patches,
     attrs,
+    overrideDerivations,
 ):
     if not isinstance(adict, dict):
         raise TypeError(adict)

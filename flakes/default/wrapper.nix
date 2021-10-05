@@ -9,25 +9,20 @@ let
   findRInput = ''
     findRInput() {
       local -r pkg="$1"
-      echo "findRInput $pkg"
+      #echo "findRInput $pkg"
       if [[ ''${already_handled[$pkg]} != "1" ]]; then
         already_handled[$pkg]="1"
         if test -d $pkg/library/; then
-          echo "Found lib in $pkg"
+          #echo "Found lib in $pkg"
           ln -s $pkg/library/* $out/lib/R/library/
-        fi
-        if test -f $pkg/nix-support/propagated-build-inputs; then 
-          mapfile -d " " inputs < "$pkg/nix-support/propagated-build-inputs"
-          for input in "''${inputs[@]}"
-          do
-            findRInput $input
-          done
         fi
         if test -f $pkg/nix-support/r_links; then 
           mapfile -d " " inputs < "$pkg/nix-support/r_links"
           for input in "''${inputs[@]}"
           do
-            findRInput $input
+            if [[ $input ]]; then 
+              findRInput $input
+            fi
           done
         fi
       fi
@@ -44,11 +39,16 @@ let
 
       nativeBuildInputs = subset;
       propagatedBuildInputs = subset;
-      propagatedNativeBuildInputs = subset;
+      # propagatedNativeBuildInputs = subset;
 
       unpackPhase = ":";
+      configurePhase =":";
+      patchPhase = ":";
+      buildPhase = ":";
+      checkPhase = ":";
       #we tried findInputs, but that stopped working around 20.03
       #because the acc vars were undeclared before this phase
+      preInstall = "";
       installPhase = ''
         mkdir $out/nix-support -p
         mkdir $out/lib/R/library -p
@@ -58,6 +58,10 @@ let
           echo $nativeBuildInputs >$out/nix-support/r_links
         fi
       '';
+      postInstall = "";
+      fixupPhase=":";
+      installCheckPhase=":";
+
 
     };
   all_packages = recommendedPackages ++ packages;
@@ -66,13 +70,15 @@ let
     # suggests that this should produce sub 1000 package 
     # sets.
     (mkshart "[Aa]" "A" all_packages)
-    (mkshart "[Bb]" "B" all_packages)
+    (mkshart "[Bb][A-Ha-h]" "Ba" all_packages)
+    (mkshart "[Bb][^A-Ha-h]" "Bi" all_packages)
     (mkshart "[Cc]" "C" all_packages)
     (mkshart "[Dd]" "D" all_packages)
     (mkshart "[Ee]" "E" all_packages)
     (mkshart "[Ff]" "F" all_packages)
     (mkshart "[Gg]" "G" all_packages)
-    (mkshart "[Hh]" "H" all_packages)
+    (mkshart "[Hh][A-Ha-h]" "Ha" all_packages)
+    (mkshart "[Hh][^A-Ha-h]" "Hi" all_packages)
     (mkshart "[Ii]" "I" all_packages)
     (mkshart "[Jj]" "J" all_packages)
     (mkshart "[Kk]" "K" all_packages)
@@ -107,7 +113,7 @@ in stdenv.mkDerivation {
   unpackPhase = ":";
   installPhase = findRInput + ''
 
-    #wee need more than just bin.
+    # we need more than just bin.
     mkdir -p $out/bin
     for i in $paths; do
       ${lndir}/bin/lndir $i $out
