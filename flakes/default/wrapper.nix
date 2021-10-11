@@ -1,4 +1,4 @@
-{ stdenv, R, makeWrapper, recommendedPackages, packages, lndir, nixpkgs }:
+{ stdenv, R, makeWrapper, recommendedPackages, packages, lndir, nixpkgs, lib }:
 
 let
   # Nix fails if we add in thousands of dependencies,
@@ -28,12 +28,12 @@ let
       fi
     }
   '';
-  mkshart = regex: wname: packages:
+  mkshard = a_chunk:
     let
-      shard_func = x: (builtins.match ("r-" + regex + ".*") x.name) != null;
-      subset = (builtins.partition shard_func packages).right;
+      chunk_no = a_chunk.fst;
+      subset = a_chunk.snd;
     in stdenv.mkDerivation {
-      name = R.name + "-wrapper-" + wname;
+      name = R.name + "-wrapper-" + builtins.toString chunk_no;
       preferLocalBuild = true;
       allowSubstitutes = false;
 
@@ -42,7 +42,7 @@ let
       # propagatedNativeBuildInputs = subset;
 
       unpackPhase = ":";
-      configurePhase =":";
+      configurePhase = ":";
       patchPhase = ":";
       buildPhase = ":";
       checkPhase = ":";
@@ -59,45 +59,24 @@ let
         fi
       '';
       postInstall = "";
-      fixupPhase=":";
-      installCheckPhase=":";
-
+      fixupPhase = ":";
+      installCheckPhase = ":";
 
     };
-  all_packages = recommendedPackages ++ packages;
-  shards = [
-    # initial examination of the R package set 
-    # suggests that this should produce sub 1000 package 
-    # sets.
-    (mkshart "[Aa]" "A" all_packages)
-    (mkshart "[Bb][A-Ha-h]" "Ba" all_packages)
-    (mkshart "[Bb][^A-Ha-h]" "Bi" all_packages)
-    (mkshart "[Cc]" "C" all_packages)
-    (mkshart "[Dd]" "D" all_packages)
-    (mkshart "[Ee]" "E" all_packages)
-    (mkshart "[Ff]" "F" all_packages)
-    (mkshart "[Gg]" "G" all_packages)
-    (mkshart "[Hh][A-Ha-h]" "Ha" all_packages)
-    (mkshart "[Hh][^A-Ha-h]" "Hi" all_packages)
-    (mkshart "[Ii]" "I" all_packages)
-    (mkshart "[Jj]" "J" all_packages)
-    (mkshart "[Kk]" "K" all_packages)
-    (mkshart "[Ll]" "L" all_packages)
-    (mkshart "[Mm]" "M" all_packages)
-    (mkshart "[Nn]" "N" all_packages)
-    (mkshart "[Oo]" "O" all_packages)
-    (mkshart "[Pp]" "P" all_packages)
-    (mkshart "[Qq]" "Q" all_packages)
-    (mkshart "[Rr]" "R" all_packages)
-    (mkshart "[Ss]" "S" all_packages)
-    (mkshart "[Tt]" "T" all_packages)
-    (mkshart "[Uu]" "U" all_packages)
-    (mkshart "[Vv]" "V" all_packages)
-    (mkshart "[Ww]" "W" all_packages)
-    (mkshart "[XxYyZz]" "XYZ" all_packages)
-    (mkshart "[XYZ]" "XYZ" all_packages)
-    (mkshart "[^A-Za-z]" "other" all_packages)
-  ];
+  drv_compare = a: b: builtins.lessThan a.name b.name;
+  all_packages = builtins.sort drv_compare
+    (recommendedPackages ++ packages); # so the chunks are always the same
+  upTo = with lib.lists; n: range 0 n;
+  chunks = with lib.lists;
+    n: xs:
+    (if xs == [ ] then
+      [ ]
+    else
+
+      [ (take n xs) ] ++ (chunks n (drop n xs)));
+  enumerate = with lib.lists; xs: (zipLists (upTo (length xs)) xs);
+  package_chunks = enumerate (chunks 100 all_packages);
+  shards = builtins.map mkshard package_chunks;
   # and this is the final, aggregate everything derivation.
 in stdenv.mkDerivation {
   name = R.name + "-wrapper";

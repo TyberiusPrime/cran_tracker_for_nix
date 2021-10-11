@@ -48,6 +48,7 @@
           inherit overrides;
           inherit breakpointHook;
         };
+        lib = pkgs.lib;
         rWrapper = pkgs.callPackage ./wrapper.nix {
           recommendedPackages = with rPackages; [
             boot
