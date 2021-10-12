@@ -1,0 +1,31 @@
+diff --git a/Makefile.am b/Makefile.am
+index 6770f57..0c2b1a1 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -54,16 +54,16 @@ flock_LDADD = $(LDADD)
+ lint:
+ 	$(LINT) $(LINT_FLAGS) src/flock.c
+ 
+-man_MANS = man/flock.1
+-man/flock.1: man/flock.1.ronn man/index.txt
+-	$(RONN) $(RONN_FLAGS) -r man/flock.1.ronn
+-man/flock.1.html: man/flock.1.ronn man/index.txt
+-	$(RONN) $(RONN_FLAGS) -5 man/flock.1.ronn
+-nroff-man: man/flock.1
+-	$(NROFF) -man < man/flock.1
+-html-man: man/flock.1.html
+-	$(OPEN) man/flock.1.html
+-doc: man/flock.1 man/flock.1.html
++#man_MANS = man/flock.1
++#man/flock.1: man/flock.1.ronn man/index.txt
++#	$(RONN) $(RONN_FLAGS) -r man/flock.1.ronn
++#man/flock.1.html: man/flock.1.ronn man/index.txt
++#	$(RONN) $(RONN_FLAGS) -5 man/flock.1.ronn
++#nroff-man: man/flock.1
++#	$(NROFF) -man < man/flock.1
++#html-man: man/flock.1.html
++#	$(OPEN) man/flock.1.html
++#doc: man/flock.1 man/flock.1.html
+ 
+ EXTRA_DIST=\
+ 	LICENSE.md \
