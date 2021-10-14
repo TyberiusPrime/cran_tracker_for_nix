@@ -617,13 +617,6 @@ class REcoSystemDumper:
                     "missing dependencies in graph", pprint.pformat(message)
                 )
 
-            # quick check on the letter distribution - so we can
-            # decide on the sharding.
-            histo = collections.Counter()
-            for name in all_packages:
-                histo[name[0].lower()] += 1
-            print("most common package start letters", histo.most_common())
-
             self.bioc_release.patch_native_dependencies(
                 graph, all_packages, were_excluded, self.archive_date
             )
@@ -1149,23 +1142,41 @@ def main():
             # so we can get the general things in place.
             last_bc = None
             for archive_date, snapshot_date in sorted(cran_dates):
-                re = REcoSystemDumper(archive_date, snapshot_date, bc)
-                if re.bioc_version != last_bc:
+                reco = REcoSystemDumper(archive_date, snapshot_date, bc)
+                if reco.bioc_version != last_bc:
                     print(archive_date)
-                    re.dump(output_toplevel / format_date(archive_date))
-                    last_bc = re.bioc_version
+                    reco.dump(output_toplevel / format_date(archive_date))
+                    last_bc = reco.bioc_version
         elif query_date == "one_per_r":
             last = None
             for archive_date, snapshot_date in sorted(cran_dates):
-                re = REcoSystemDumper(archive_date, snapshot_date, bc)
+                reco = REcoSystemDumper(archive_date, snapshot_date, bc)
                 minor_r_version = self.get_R_version_including_minor(
-                    archive_date, re.r_track
+                    archive_date, reco.r_track
                 )
-                k = (re.bioc_version, minor_r_verison)
+                k = (reco.bioc_version, minor_r_verison)
                 if k != last:
                     print(archive_date, k)
-                    re.dump(output_toplevel / format_date(archive_date))
+                    reco.dump(output_toplevel / format_date(archive_date))
                     last = k
+        elif re.match(r"^\d+\.\d+[+]?", query_date):
+            if query_date.endswith('+'):
+                use_all = True
+                query_date = query_date[:-1]
+            else:
+                use_all = False
+            found = False
+            for archive_date, snapshot_date in sorted(cran_dates):
+                reco = REcoSystemDumper(archive_date, snapshot_date, bc)
+                if reco.bioc_release == query_date:
+                    print(archive_date)
+                    reco.dump(output_toplevel / format_date(archive_date))
+                    last_bc = reco.bioc_version
+                    found = True
+                    if not use_all:
+                        break
+            if not found:
+                raise ValueError("bioconductor version requested not found", query_date)
 
         else:
             for archive_date, snapshot_date in cran_dates:
@@ -1176,7 +1187,7 @@ def main():
                     break
             else:
                 raise KeyError("Not found")
-    #dump_subgraph_for_debug(ppg2.global_pipegraph)
+    # dump_subgraph_for_debug(ppg2.global_pipegraph)
     ppg2.run()
 
 
