@@ -1,0 +1,110 @@
+diff --git a/MD5 b/MD5
+index 74c9570..d7e7de6 100644
+--- a/MD5
++++ b/MD5
+@@ -4,7 +4,7 @@
+ cba21fc7e2d39608d0241d8cedc4fd43 *R/run.bayesx.R
+ 112cb3aff0f8f0cd60bb146b14df1fcf *inst/CITATION
+ cf04425475f03ee67c06efcebbd8d476 *man/run.bayesx.Rd
+-1f73de4dba1228cdaa8d5435d1c1656b *src/Makefile
++658152ec0b336198a2654385bb27666d *src/Makefile
+ 2971212d003d1d647110264fb471e63b *src/Makefile.win
+ e0fd1515e0d2f8553d4034c3f7544fc5 *src/bayesxsrc/adaptiv/fullcond_adaptiv.cpp
+ 08cd954d541c3c0d635bbbd61cd05d15 *src/bayesxsrc/adaptiv/fullcond_adaptiv.h
+@@ -320,7 +320,7 @@ e50230be68eb3ad3d5724873c4f2c27b *src/bayesxsrc/values.h
+ 465ac930657299f89a0a164232dc15d2 *src/dev-Makefile
+ d9aafe726622cd8c46bab760fef0d813 *src/dev-Makefile.win
+ 50413e579bc999d49037293a612190c0 *src/install.libs.R
+-1f73de4dba1228cdaa8d5435d1c1656b *src/rel-Makefile
++658152ec0b336198a2654385bb27666d *src/rel-Makefile
+ 2971212d003d1d647110264fb471e63b *src/rel-Makefile.win
+ 4d675785837670b6a9b2b3405812a910 *tests/data.raw
+ 1d3777462fcefa39559aa645305a65f2 *tests/mcmc.R
+diff --git a/src/Makefile b/src/Makefile
+index f1d920d..e7d84b0 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -137,11 +137,11 @@ OBJS = \
+ 	${PSPLINES_OBJS}\
+ 	${STRUCTADD_OBJS}\
+ 	bayesxsrc/main.o\
+-       	bayesxsrc/samson/multgaussian.o\
++	bayesxsrc/samson/multgaussian.o\
+ 	bayesxsrc/adaptiv/fullcond_adaptiv.o\
+ 	bayesxsrc/alex/mixture.o
+ 
+-LDFLAGS  += -L${R_HOME}/lib -lreadline -lcurses
++LDFLAGS  += -L${R_HOME}/lib -lreadline -lncurses
+ CPPFLAGS +=  -Ibayesxsrc/. -I"bayesxsrc/bib"  -I"bayesxsrc/alex"  -I"bayesxsrc/adaptiv"  -I"bayesxsrc/andrea"  -I"bayesxsrc/dag"  -I"bayesxsrc/graph"  -I"bayesxsrc/mcmc"  -I"bayesxsrc/psplines"  -I"bayesxsrc/samson"  -I"bayesxsrc/leyre"  -I"bayesxsrc/structadd"
+ CPPFLAGS += -D__BUILDING_GNU -D__BUILDING_LINUX -DTEMPL_INCL_DEF -D_MSC_VER2 -DNO_TEMPLATE_FRIENDS -DINCLUDE_REML -DINCLUDE_MCMC
+ # CXXFLAGS += -O3 -ansi
+diff --git a/src/Makefile.win b/src/Makefile.win
+index 300120e..6552595 100644
+--- a/src/Makefile.win
++++ b/src/Makefile.win
+@@ -143,7 +143,7 @@ OBJS = \
+ 	bayesxsrc/adaptiv/fullcond_adaptiv.o\
+ 	bayesxsrc/alex/mixture.o
+ 
+-# LDFLAGS  += -lreadline -lcurses
++# LDFLAGS  += -lreadline -lncurses
+ LDFLAGS  += -static-libgcc
+ CPPFLAGS +=  -Ibayesxsrc/. -I"bayesxsrc/bib"  -I"bayesxsrc/alex"  -I"bayesxsrc/adaptiv"  -I"bayesxsrc/andrea"  -I"bayesxsrc/dag"  -I"bayesxsrc/graph"  -I"bayesxsrc/mcmc"  -I"bayesxsrc/psplines"  -I"bayesxsrc/samson"  -I"bayesxsrc/leyre"  -I"bayesxsrc/structadd"
+ CPPFLAGS += -D__BUILDING_GNU -DTEMPL_INCL_DEF -DNO_TEMPLATE_FRIENDS -DINCLUDE_REML -DINCLUDE_MCMC -D_MSC_VER2
+diff --git a/src/dev-Makefile b/src/dev-Makefile
+index 1ffcc1d..9af898a 100644
+--- a/src/dev-Makefile
++++ b/src/dev-Makefile
+@@ -146,7 +146,7 @@ OBJS = \
+ 	bayesxsrc/adaptiv/fullcond_adaptiv.o\
+ 	bayesxsrc/alex/mixture.o
+ 
+-LDFLAGS  += -L${R_HOME}/lib -lreadline -lcurses
++LDFLAGS  += -L${R_HOME}/lib -lreadline -lncurses
+ CPPFLAGS +=  -Ibayesxsrc/. -I"bayesxsrc/bib"  -I"bayesxsrc/alex"  -I"bayesxsrc/adaptiv"  -I"bayesxsrc/andrea"  -I"bayesxsrc/dag"  -I"bayesxsrc/graph"  -I"bayesxsrc/mcmc"  -I"bayesxsrc/psplines"  -I"bayesxsrc/samson"  -I"bayesxsrc/leyre"  -I"bayesxsrc/structadd"
+ CPPFLAGS += -D__BUILDING_GNU -D__BUILDING_LINUX -DTEMPL_INCL_DEF -D_MSC_VER2 -DNO_TEMPLATE_FRIENDS -DINCLUDE_REML -DINCLUDE_MCMC
+ # CXXFLAGS += -O3 -ansi
+diff --git a/src/dev-Makefile.win b/src/dev-Makefile.win
+index 66387f1..91583ad 100644
+--- a/src/dev-Makefile.win
++++ b/src/dev-Makefile.win
+@@ -148,7 +148,7 @@ OBJS = \
+ 	bayesxsrc/adaptiv/fullcond_adaptiv.o\
+ 	bayesxsrc/alex/mixture.o
+ 
+-# LDFLAGS  += -lreadline -lcurses
++# LDFLAGS  += -lreadline -lncurses
+ LDFLAGS  += -static-libgcc
+ CPPFLAGS +=  -Ibayesxsrc/. -I"bayesxsrc/bib"  -I"bayesxsrc/alex"  -I"bayesxsrc/adaptiv"  -I"bayesxsrc/andrea"  -I"bayesxsrc/dag"  -I"bayesxsrc/graph"  -I"bayesxsrc/mcmc"  -I"bayesxsrc/psplines"  -I"bayesxsrc/samson"  -I"bayesxsrc/leyre"  -I"bayesxsrc/structadd"
+ CPPFLAGS += -D__BUILDING_GNU -DTEMPL_INCL_DEF -DNO_TEMPLATE_FRIENDS -DINCLUDE_REML -DINCLUDE_MCMC -D_MSC_VER2
+diff --git a/src/rel-Makefile b/src/rel-Makefile
+index f1d920d..e7d84b0 100644
+--- a/src/rel-Makefile
++++ b/src/rel-Makefile
+@@ -137,11 +137,11 @@ OBJS = \
+ 	${PSPLINES_OBJS}\
+ 	${STRUCTADD_OBJS}\
+ 	bayesxsrc/main.o\
+-       	bayesxsrc/samson/multgaussian.o\
++	bayesxsrc/samson/multgaussian.o\
+ 	bayesxsrc/adaptiv/fullcond_adaptiv.o\
+ 	bayesxsrc/alex/mixture.o
+ 
+-LDFLAGS  += -L${R_HOME}/lib -lreadline -lcurses
++LDFLAGS  += -L${R_HOME}/lib -lreadline -lncurses
+ CPPFLAGS +=  -Ibayesxsrc/. -I"bayesxsrc/bib"  -I"bayesxsrc/alex"  -I"bayesxsrc/adaptiv"  -I"bayesxsrc/andrea"  -I"bayesxsrc/dag"  -I"bayesxsrc/graph"  -I"bayesxsrc/mcmc"  -I"bayesxsrc/psplines"  -I"bayesxsrc/samson"  -I"bayesxsrc/leyre"  -I"bayesxsrc/structadd"
+ CPPFLAGS += -D__BUILDING_GNU -D__BUILDING_LINUX -DTEMPL_INCL_DEF -D_MSC_VER2 -DNO_TEMPLATE_FRIENDS -DINCLUDE_REML -DINCLUDE_MCMC
+ # CXXFLAGS += -O3 -ansi
+diff --git a/src/rel-Makefile.win b/src/rel-Makefile.win
+index 300120e..6552595 100644
+--- a/src/rel-Makefile.win
++++ b/src/rel-Makefile.win
+@@ -143,7 +143,7 @@ OBJS = \
+ 	bayesxsrc/adaptiv/fullcond_adaptiv.o\
+ 	bayesxsrc/alex/mixture.o
+ 
+-# LDFLAGS  += -lreadline -lcurses
++# LDFLAGS  += -lreadline -lncurses
+ LDFLAGS  += -static-libgcc
+ CPPFLAGS +=  -Ibayesxsrc/. -I"bayesxsrc/bib"  -I"bayesxsrc/alex"  -I"bayesxsrc/adaptiv"  -I"bayesxsrc/andrea"  -I"bayesxsrc/dag"  -I"bayesxsrc/graph"  -I"bayesxsrc/mcmc"  -I"bayesxsrc/psplines"  -I"bayesxsrc/samson"  -I"bayesxsrc/leyre"  -I"bayesxsrc/structadd"
+ CPPFLAGS += -D__BUILDING_GNU -DTEMPL_INCL_DEF -DNO_TEMPLATE_FRIENDS -DINCLUDE_REML -DINCLUDE_MCMC -D_MSC_VER2

@@ -32,6 +32,7 @@ from .common import (
     read_packages_and_versions_from_json,
     hash_job,
     read_json,
+    write_json,
     version_to_tuple,
     parse_date,
     format_date,
@@ -65,9 +66,17 @@ class BioConductorTrack:
     @lazy
     def config_yaml(self):
         """Retrieve the helpfully provided bioconductor metainformation"""
+        cache_path = common.store_path / "bioconductor" / "config.json.gz"
+        if cache_path.exists():
+            date, raw = read_json(cache_path)
+            if date == datetime.date.today():
+                i = io.StringIO(raw)
+                return yaml.safe_load(i)
         url = "https://bioconductor.org/config.yaml"
         r = requests.get(url)
-        i = io.StringIO(r.text)
+        raw = r.text
+        write_json([datetime.datetime.today(), raw], cache_path)
+        i = io.StringIO(raw)
         return yaml.safe_load(i)
 
     @lazy
@@ -668,8 +677,8 @@ class BioconductorRelease:
                 ] = bioconductor_overrides.patches_by_package_version[key]
 
         if errors:
-            #print(sorted(all_packages.keys()))
-            #print(excluded)
+            # print(sorted(all_packages.keys()))
+            # print(excluded)
             raise ValueError(
                 "\n".join(errors),
             )

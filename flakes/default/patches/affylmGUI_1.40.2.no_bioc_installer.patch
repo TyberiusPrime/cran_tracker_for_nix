@@ -1,0 +1,37 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index 5162b1a..b9b8006 100755
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -5,7 +5,7 @@ Title: GUI for affy analysis using limma package
+ Author: James Wettenhall and Ken Simpson Division of Genetics and Bioinformatics, WEHI.
+ Maintainer: Keith Satterley <keith@wehi.edu.au>
+ Depends: affyPLM, tkrplot
+-Imports: limma, tcltk, affy, BiocInstaller, affyio, R2HTML, xtable,
++Imports: limma, tcltk, affy, affyio, R2HTML, xtable,
+         gcrma, AnnotationDbi
+ LazyLoad: yes
+ Description: A Graphical User Interface for affy analysis using the limma Microarray package
+diff --git a/NAMESPACE b/NAMESPACE
+index ed1cfac..b068ece 100644
+--- a/NAMESPACE
++++ b/NAMESPACE
+@@ -1,5 +1,5 @@
+ 
+-import(limma, tcltk, tkrplot, affy, BiocInstaller, affyio, affyPLM, R2HTML, xtable, gcrma, AnnotationDbi)
++import(limma, tcltk, tkrplot, affy, affyio, affyPLM, R2HTML, xtable, gcrma, AnnotationDbi)
+ 
+ #  All functions exported other than those starting with "."
+ exportPattern("^[^\\.]")
+diff --git a/R/main.R b/R/main.R
+index 49893cd..f87ede7 100755
+--- a/R/main.R
++++ b/R/main.R
+@@ -7,7 +7,7 @@ if(require(BiocInstaller)==FALSE){
+ 			type="ok"
+ 		)
+ 	} #end of if(interactive())
+-	stop("Cannot find package BiocInstaller")
++	warning("Cannot find package BiocInstaller - expected on nix")
+ } #end of if(require(BiocInstaller)==FALSE)
+ #
+ #

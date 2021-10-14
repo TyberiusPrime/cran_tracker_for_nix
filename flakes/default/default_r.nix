@@ -4,8 +4,38 @@
 
 let
   inherit (pkgs) fetchurl stdenv lib;
+  flock = if builtins.hasAttr "flock" pkgs then
+    pkgs.flock
+  else
+    with pkgs;
+    stdenv.mkDerivation rec {
+      pname = "flock";
+      name = "${pname}-${version}";
+      version = "0.2.3";
 
-  buildRPackage = pkgs.callPackage ./generic-builder.nix { inherit R; };
+      src = fetchFromGitHub {
+        owner = "discoteq";
+        repo = pname;
+        rev = "v${version}";
+        sha256 = "1vdq22zhdfi7wwndsd6s7fwmz02fsn0x04d7asq4hslk7bjxjjzn";
+      };
+      patches = [ ./patches/flock_no_man.patch ]; # don't want to pull in ruby and gem and stuff for the man page here.
+
+      nativeBuildInputs = [ autoreconfHook ];
+      buildInputs = [ ];
+
+      meta = with lib; {
+        description = "Cross-platform version of flock(1)";
+        maintainers = [ maintainers.matthewbauer ];
+        platforms = platforms.all;
+        license = licenses.isc;
+      };
+    };
+
+  buildRPackage = pkgs.callPackage ./generic-builder.nix {
+    inherit R;
+    inherit flock;
+  };
 
   # Generates package templates given per-repository settings
   #
@@ -51,6 +81,7 @@ let
     mkUrls = { name, version, biocVersion }: [
 
       "mirror://bioc/${biocVersion}/bioc/src/contrib/${name}_${version}.tar.gz"
+      #"https://bioarchive.galaxyproject.org/${name}_${version}.tar.gz" # only has some versions. and the hashes ain't identical
       "mirror://bioc/${biocVersion}/bioc/src/contrib/Archive/${name}/${name}_${version}.tar.gz"
       "mirror://bioc/${biocVersion}/bioc/src/contrib/Archive/${name}_${version}.tar.gz"
       "http://bioconductor.org/packages/${biocVersion}/bioc/src/contrib/${name}_${version}.tar.gz"

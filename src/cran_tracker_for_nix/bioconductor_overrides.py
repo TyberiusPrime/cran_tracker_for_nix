@@ -181,7 +181,8 @@ r_versions = {
     # key is bioconductor str_release,
     # or (bioconductor str_release, date)
     "3.0": "3.1.3",  # 3.1.1 by date, but 3.1.3 is the first in nixpkgs passing it's tests
-    "3.4": "3.3.2",  # 3.3.1 by date (but only for 13 days), and 3.3.1 fails t's tests.
+    "3.3": "3.3.1",  # 3.3.0 by date , and 3.3.0 fails timezone tests, 3.3.2 fails because MASS is not available (we build without-recommended-packages...)
+    "3.4": "3.3.3",  # 3.3.1 by date (but only for 13 days), and 3.3.1 and 3.3.2 fails their tests (.2 because MASS in not available - we build without recommendoed packages...).
 }
 
 # override, because I want to decide this manually
@@ -258,7 +259,11 @@ r_patches = {
     # ],  # never in nixpkgs
     "3.3.2": bp + ["./r_patches/zlib-version-check.patch"],
     "3.3.3": bp + ["./r_patches/zlib-version-check.patch"],
-    "3.4.0": bp + ["./r_patches/fix-sweave-exit-code.patch "],
+    "3.4.0": bp
+    + [
+        "./r_patches/fix-sweave-exit-code.patch",
+        "./r_patches/3.3.0_fix_reg-test-1c.patch",
+    ],
     "3.4.1": bp,
     "3.4.2": bp,
     "3.4.3": bp,
@@ -314,6 +319,7 @@ additional_r_overrides = {
 }
 flake_overrides = {
     # R version -> path in ./flakes/
+    # "3.3.3": "3.3.2",
     "4.0.0": "4.0.0",
 }
 
@@ -333,66 +339,66 @@ inherit(
     excluded_packages,
     "3.0",
     {
+        # repository doublettes
         "bioc_experiment--MafDb.ALL.wgs.phase1.release.v3.20101123": "newer in bioconductor-annotation",
         "bioc_experiment--MafDb.ESP6500SI.V2.SSA137.dbSNP138": "newer in bioconductor-annotation",
         "bioc_experiment--phastCons100way.UCSC.hg19": "newer in bioconductor-annotation",
         "cran--GOsummaries": "newer in bioconductor",
         "cran--gdsfmt": "newer in bioconductor",
         "cran--oposSOM": "newer in bioconductor",
-        # level 0
+        # actual excludes
+        # "affy": "requries BiocInstaller",
+        "bigGP": "build is broken",
+        "bioassayR": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
+        "BiocCheck": "requries BiocInstaller",
+        "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
+        "clpAPI": "insists on /usr/include and /usr/local/include",
+        "cudaBayesreg": "build is broken, needs nvcc",
+        "cummeRbund": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
+        "doMPI": "build is broken with mpi trouble",
+        "easyRNASeq": "needs LSD>=3.0, which shows up on 2015-01-10",  # bc
+        # "gWidgetstcltk": "tcl invalid command name 'font'",
+        "HilbertVisGUI": "needs OpenCL, not available in nixpkgs 15.09",
+        "HiPLARM": "build is broken, and the package never got any updates and was removed in 2017-07-02",
+        "HSMMSingleCell": "needs VGAM > 0.9.5, that shows up on 11-07",  # bc
+        "interactiveDisplayBase": "wants to talk to bioconductor.org during installation",
+        "jvmr": "broken build. Wants to talk to ddahl.org. Access /home/dahl during build",
+        "ltsk": "missing lRlacpack und lRblas?",
+        "MSeasyTkGUI": "Needs Tk",
+        "MSGFgui": "needs shiny.>=0.11.0 which shows up on 2015-02-11",  # bc
+        "ncdfFlow": "no hdf5.dev in this nixpkgs",
+        "NCmisc": "requires BiocInstaller",
+        "nloptr": "nlopt library is broken in nixpkgs 15.09",
+        "npRmpi": "build is broken with mpi trouble",
+        "oligoClasses": "requires biocInstaller during installation",
+        "OpenCL": "needs OpenCL, not available in nixpkgs 15.09",
+        "pbdSLAP": "build is broken with mpi trouble",
+        "permGPU": "build is broken, needs nvcc",
+        "plethy": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
+        "pmclust": "build is broken with mpi trouble",
+        "qtpaint": "missing libQtCore.so.4 and was listed as broken in nixpkgs 15.09",
+        "QuasR": "requires BiocInstaller",
+        "Rcplex": "cplex (c dependency) only shows up later in nixpkgs than 15.09",
+        "RcppOctave": "build seems incompatible with octave version in nixpkgs.",
+        "rgdal": "not compatible with GDAL2 (which is what's in nixpkgs at this point)",
+        "rhdf5": "no hdf5.dev in this nixpkgs",
+        "Rmosek": "build is broken according to R/default.nix",
+        "ROracle": "OCI libraries not found",
+        "rpanel": "build broken, wants DISPLAY?",
+        "RQuantLib": "hquantlib ( if that's even the right package) is broken in nixpgks 15.09)",
+        "RSAP": "misssing sapnwrfc.h",
+        "rsbml": "libsmbl isn't packagd in nixpkg ",
+        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        "seqplots": "needs shiny.>=0.11.0 which shows up on 2015-02-11",  # bc
+        "SOD": "build broken without libOpenCL",
         "SSOAP": "(omegahat / github only?)",
-        # "RDCOMClient": "(omegahat / github only?)",
+        "SVGAnnotation": "github only?",
+        "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
+        "trackViewer": "tcl issue",
+        "UniProt.ws": "wants to talk to uniprot.org",
+        "VariantFiltering": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
         "XMLRPC": "(omegahat / github only?)",
         "XMLSchema": "(omegahat / github only?)",
-        "SVGAnnotation": "github only?",
-        "qtpaint": "missing libQtCore.so.4 and was listed as broken in nixpkgs 15.09",
-        "nloptr": "nlopt library is broken in nixpkgs 15.09",
-        "HiPLARM": "build is broken, and the package never got any updates and was removed in 2017-07-02",
-        "Rmosek": "build is broken according to R/default.nix",
-        "bigGP": "build is broken",
-        "SOD": "build broken without libOpenCL",
-        "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
-        "doMPI": "build is broken with mpi trouble",
-        "pmclust": "build is broken with mpi trouble",
-        "pbdSLAP": "build is broken with mpi trouble",
-        "npRmpi": "build is broken with mpi trouble",
-        "cudaBayesreg": "build is broken, needs nvcc",
-        "permGPU": "build is broken, needs nvcc",
-        "Rcplex": "cplex (c dependency) only shows up later in nixpkgs than 15.09",
-        "RSAP": "misssing sapnwrfc.h",
-        "jvmr": "broken build. Wants to talk to ddahl.org. Access /home/dahl during build",
-        "rpanel": "build broken, wants DISPLAY?",
-        "rgdal": "not compatible with GDAL2 (which is what's in nixpkgs at this point)",
-        "rsbml": "libsmbl isn't packagd in nixpkg ",
-        "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
-        "interactiveDisplayBase": "wants to talk to bioconductor.org during installation",
-        "RcppOctave": "build seems incompatible with octave version in nixpkgs.",
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
-        "oligoClasses": "requires biocInstaller during installation",
-        "UniProt.ws": "wants to talk to uniprot.org",
-        "BiocCheck": "requries BiocInstaller",
-        "affy": "requries BiocInstaller",
-        "MSeasyTkGUI": "Needs Tk",
-        "ncdfFlow": "no hdf5.dev in this nixpkgs",
-        "rhdf5": "no hdf5.dev in this nixpkgs",
-        "ltsk": "missing lRlacpack und lRblas?",
-        "clpAPI": "insists on /usr/include and /usr/local/include",
-        "ROracle": "OCI libraries not found",
-        "NCmisc": "requires BiocInstaller",
-        "QuasR": "requires BiocInstaller",
-        "trackViewer": "tcl issue",
-        "RQuantLib": "hquantlib ( if that's even the right package) is broken in nixpgks 15.09)",
-        "HilbertVisGUI": "needs OpenCL, not available in nixpkgs 15.09",
-        "OpenCL": "needs OpenCL, not available in nixpkgs 15.09",
-        # "gWidgetstcltk": "tcl invalid command name 'font'",
-        "easyRNASeq": "needs LSD>=3.0, which shows up on 2015-01-10",  # bc
-        "seqplots": "needs shiny.>=0.11.0 which shows up on 2015-02-11",  # bc
-        "MSGFgui": "needs shiny.>=0.11.0 which shows up on 2015-02-11",  # bc
-        "HSMMSingleCell": "needs VGAM > 0.9.5, that shows up on 11-07",  # bc
-        "bioassayR": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-        "plethy": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-        "cummeRbund": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-        "VariantFiltering": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
     },
 )
 inherit(
@@ -501,6 +507,7 @@ inherit(
         "DT": "dt shows up on 2015-08-01",
         "clipper": "missing export in igraph. Needs 1.0.0, perhaps?",
         "NGScopy": "required changepoint version shows up 2015-10-01",
+        #'WideLM': 'ncvv too old (missing option)',
     },
 )
 inherit(
@@ -521,14 +528,14 @@ inherit(
 
 inherit(excluded_packages, ("3.1", "2015-05-16"), {}, ["bamboo"])
 inherit(excluded_packages, ("3.1", "2015-06-09"), {}, ["seqplots"])
-inherit(
-    excluded_packages,
-    ("3.1", "2015-06-30"),
-    {
-        "stringi": "Wants to download icudt55l.zip",
-    },
-    [],
-)
+# inherit(
+#     excluded_packages,
+#     ("3.1", "2015-06-30"),
+#     {
+#         #"stringi": "Wants to download icudt55l.zip",
+#     },
+#     [],
+# )
 inherit(
     excluded_packages,
     ("3.1", "2015-07-02"),
@@ -620,6 +627,7 @@ inherit(  # start anew.
         "ggrepel": "was added only in 10-2016",
         "spliceSites": "needs rbamtools 2.14.3 - available",
         "iFes": "nvcc  Unsupported gpu architecture 'compute_10'",
+        #'WideLM': 'ncvv too old (missing option)',
     },
 )
 inherit(excluded_packages, ("3.2", "2015-12-29"), {}, ["flowCore"])
@@ -641,6 +649,9 @@ inherit(  # start anew.
         "XMLRPC": "(omegahat / github only?)",
         "SVGAnnotation": "github only?",
         "bioc_experiment--IHW": "newer in bioconductor-software",
+        "nloptr": "nlopt library is broken in nixpkgs 16.03",
+        "ChemmineOB": "openbabel is broken in nixpkgs 16.03",
+        "RcppOctave": "octave-package segfaults during build",
     },
 )
 
@@ -648,12 +659,14 @@ inherit(  # start anew.
     excluded_packages,
     ("3.4"),
     {
-        # "nloptr": "nlopt library is broken in nixpkgs 17.04?",
         "XMLRPC": "(omegahat / github only?)",
         "SVGAnnotation": "github only?",
         "cran--PharmacoGx": "newer in bioconductor",
         "cran--statTarget": "newer in bioconductor",
         "cran--synergyfinder": "newer in bioconductor",
+        #
+        "nloptr": "nlopt library is broken in nixpkgs 17.04",
+        "ChemmineOB": "openbabel is broken in nixpkgs 17.04",
     },
 )
 inherit(  # start anew.
@@ -1183,7 +1196,7 @@ inherit(
         "sprint": ["openmpi"],
         "ssanv": ["proj"],
         "STARSEQ": ["zlib"],
-        "stringi": ["pkgs.icu.dev"],
+        "stringi": ["icu"],
         "stsm": ["gsl"],
         "survSNP": ["gsl"],
         "sysfonts": ["pkgconfig", "zlib", "libpng", "freetype"],
@@ -1313,7 +1326,15 @@ inherit(native_build_inputs, ("3.2", "2016-01-11"), {}, ["ncdf"])
 inherit(native_build_inputs, "3.3", {}, [], copy_anyway=True)
 
 inherit(native_build_inputs, "3.4", {}, ["MMDiff", "SJava"], copy_anyway=True)
-inherit(native_build_inputs, "3.5", {}, [], copy_anyway=True)
+inherit(
+    native_build_inputs,
+    "3.5",
+    {
+        "stringi": ["pkgs.icu.dev"],  # available 17.03.  #
+    },
+    [],
+    copy_anyway=True,
+)
 inherit(native_build_inputs, "3.6", {}, [], copy_anyway=True)
 inherit(
     native_build_inputs,
@@ -1702,7 +1723,9 @@ inherit(
 inherit(build_inputs, "3.2", {}, [], copy_anyway=True)
 inherit(build_inputs, ("3.2", "2015-11-21"), {}, ["CARramps", "rpud", "WideLM"])
 inherit(build_inputs, "3.3", {}, [], copy_anyway=True)
-inherit(build_inputs, "3.4", {}, [], copy_anyway=True)
+inherit(build_inputs, "3.4", {
+        "tikzDevice": ["which", "pkgs.texlive.combined.scheme-medium"],
+    }, [], copy_anyway=True)
 inherit(build_inputs, ("3.4", "2017-03-11"), {}, ["ecoretriever"])
 inherit(build_inputs, "3.5", {}, [], copy_anyway=True)
 inherit(build_inputs, "3.6", {}, [], copy_anyway=True)
@@ -1831,7 +1854,7 @@ inherit_list(
     [
         "RNAmodR.Data",
     ],
-    ['gmatrix','sprint'],
+    ["gmatrix", "sprint"],
     copy_anyway=True,
 )  # MPI
 inherit_list(skip_check, "3.11", [], [], copy_anyway=True)
@@ -1888,18 +1911,22 @@ inherit(
     patches,
     "3.0",
     {
+        "affy": [nl("./../patches/affy_1.44.no_bioc_installer.patch")],
+        "gcrma": [nl("./../patches/gcrma_2.38.no_bioc_installer.patch")],
+        "webbioc": [nl("./../patches/webbioc.1.38.0.no_bioc_installer.patch")],
+        "affylmGUI": [nl("./../patches/affylmGUI_1.40.2.no_bioc_installer.patch")],
         "BayesBridge": [nl("./../patches/BayesBridge.patch")],
-        "bayesLogit": [nl("./../patches/BayesLogit.patch")],
+        "BayesLogit": [nl("./../patches/BayesLogit.patch")],
         "BayesXsrc": [nl("./../patches/BayesXsrc.patch")],
         "CARramps": [nl("./../patches/CARramps.patch")],
         "EMCluster": [nl("./../patches/EMCluster.patch")],
         "gmatrix": [nl("./../patches/gmatrix.patch")],
         "gputools": [nl("./../patches/gputools.patch")],
-        "iFes": [nl("./../patches/iFes.patch")],
+        # "iFes": [nl("./../patches/iFes.patch")],
         "qtbase": [nl("./../patches/qtbase.patch")],
         "RAppArmor": [nl("./../patches/RAppArmor.patch")],
         "rpud": [nl("./../patches/rpud.patch")],
-        "RServe": [nl("./../patches/Rserve.patch")],
+        "Rserve": [nl("./../patches/Rserve.patch")],
         "spMC": [nl("./../patches/spMC.patch")],
         "WideLM": [nl("./../patches/WideLM.patch")],
     },
@@ -1920,7 +1947,9 @@ inherit(
     {
         "qtbase": [nl("./../patches/qtbase.patch")],
         "RMySQL": [nl("./../patches/RMySQL.patch")],
+        "BayesXsrc": [nl("./../patches/BayesXsrc_2.1-2.patch")],
     },
+    copy_anyway=True,
 )
 inherit(
     patches,
@@ -1937,8 +1966,9 @@ inherit(
     {
         "qtbase": [nl("./../patches/qtbase_1.0.9.patch")],
     },
+    copy_anyway=True,
 )
-inherit(patches, "3.3", {}, copy_anyway=True)
+inherit(patches, "3.3", {}, ["CARramps", "rpud", "WideLM"], copy_anyway=True)
 inherit(patches, "3.4", {}, copy_anyway=True)
 inherit(patches, "3.5", {}, copy_anyway=True)
 inherit(patches, "3.6", {}, copy_anyway=True)
@@ -1987,7 +2017,6 @@ inherit(
             "hydraPlatforms": "stdenv.lib.platforms.none",
             "configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"],
         },
-        "curl": {"preConfigure": "export CURL_INCLUDES=${pkgs.curl}/include"},
         "devEMF": {"NIX_CFLAGS_LINK": "-L${pkgs.xlibs.libXft}/lib -lXft"},
         "gmatrix": {
             "CUDA_LIB_PATH": "${pkgs.cudatoolkit}/lib64",
@@ -1995,7 +2024,7 @@ inherit(
             "CUDA_INC_PATH": "${pkgs.cudatoolkit}/usr_include",
         },
         "gputools": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
-        "iFes": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
+        # "iFes": {"CUDA_HOME": "${pkgs.cudatoolkit}"},
         "JavaGD": {
             "preConfigure": """
         export JAVA_CPPFLAGS=-I${pkgs.jdk}/include/
@@ -2009,10 +2038,6 @@ inherit(
                 "--with-nlopt-cflags=-I${pkgs.nlopt}/include"
                 "--with-nlopt-libs='-L${pkgs.nlopt}/lib -lnlopt_cxx -lm'"
             ]
-        },
-        "openssl": {
-            "OPENSSL_INCLUDES": "${pkgs.openssl}/include",
-            "LD_LIBRARY_PATH": "${pkgs.openssl.out}/lib;",
         },
         "RAppArmor": {"LIBAPPARMOR_HOME": "${pkgs.libapparmor}"},
         "RcppArmadillo": shebangs,
@@ -2034,7 +2059,7 @@ inherit(
         "RVowpalWabbit": {
             "configureFlags": [
                 "--with-boost=${pkgs.boost.dev}",
-                "--with-boost-libdir=${pkgs.boost}/lib",
+                "--with-boost-libdir=${pkgs.boost.lib}/lib",
             ],
         },
         "SamplerCompare": {"PKG_LIBS": "-L${pkgs.openblasCompat}/lib -lopenblas"},
@@ -2045,16 +2070,50 @@ inherit(
         export JAVA_HOME=${pkgs.jdk}
         """
         },
+        "WideLM": {"configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"]},
+    },
+)
+inherit(
+    attrs,
+    ("3.0", "2014-10-22"),
+    {
+        "openssl": {
+            "OPENSSL_INCLUDES": "${pkgs.openssl}/include",
+            "LD_LIBRARY_PATH": "${pkgs.openssl.out}/lib;",
+        },
+    },
+)
+inherit(
+    attrs,
+    ("3.0", "2014-11-21"),
+    {
+        "curl": {"preConfigure": "export CURL_INCLUDES=${pkgs.curl}/include"},
+    },
+)
+inherit(
+    attrs,
+    ("3.0", "2014-12-09"),
+    {
         "V8": {
             "preConfigure": "export V8_INCLUDES=${pkgs.v8}/include",
         },
-        "WideLM": {"configureFlags": ["--with-cuda-home=${pkgs.cudatoolkit}"]},
+    },
+)
+
+
+inherit(attrs, "3.1", {}, copy_anyway=True)
+
+inherit(
+    attrs,
+    ("3.1", "2015-04-21"),
+    {
         "xml2": {
             "preConfigure": "export LIBXML_INCDIR=${pkgs.libxml2}/include/libxml2"
         },
     },
 )
-inherit(attrs, "3.1", {}, copy_anyway=True)
+
+
 inherit(
     attrs,
     ("3.1", "2015-05-28"),
@@ -2068,7 +2127,7 @@ inherit(
         "curl": shebangs,
         "Rblpapi": shebangs,
         "xml2": shebangs,
-        "RMySQL": dict_add(shebangs, {"MYSQL_DIR": "${pkgs.mysql.connector-c}"}),
+        "RMySQL": shebangs,  # dict_add(shebangs, {"MYSQL_DIR": "${pkgs.mysql.connector-c}"}), # wrong todo
     },
 )
 
@@ -2097,7 +2156,16 @@ inherit(
     ["CARramps", "rpud", "WideLM"],
 )
 inherit(attrs, "3.3", {}, copy_anyway=True)
-inherit(attrs, "3.4", {}, copy_anyway=True)
+inherit(attrs, "3.4", {
+"RVowpalWabbit": {
+            "configureFlags": [
+                "--with-boost=${pkgs.boost.dev}",
+                "--with-boost-libdir=${pkgs.boost}/lib",
+            ],
+        },
+
+
+    }, ["SJava"], copy_anyway=True)
 inherit(attrs, "3.5", {}, copy_anyway=True)
 inherit(attrs, "3.6", {}, copy_anyway=True)
 inherit(attrs, "3.7", {}, copy_anyway=True)

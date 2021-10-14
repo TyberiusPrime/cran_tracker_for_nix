@@ -1,0 +1,46 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index 3383f5c..27eec0f 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -11,7 +11,7 @@ License: LGPL
+ Depends: R (>= 2.6.0), affy (>= 1.23.2), graphics, methods, stats,
+         utils
+ Imports: Biobase, affy (>= 1.23.2), affyio (>= 1.13.3), XVector,
+-        Biostrings (>= 2.11.32), splines, BiocInstaller
++        Biostrings (>= 2.11.32), splines
+ Suggests: affydata, tools, splines, hgu95av2cdf, hgu95av2probe
+ biocViews: Microarray, OneChannel, Preprocessing
+ Packaged: 2014-10-14 00:27:41 UTC; biocbuild
+diff --git a/NAMESPACE b/NAMESPACE
+index 4e92535..625104a 100644
+--- a/NAMESPACE
++++ b/NAMESPACE
+@@ -12,8 +12,6 @@ importFrom(affyio, read.celfile.header)
+ 
+ importFrom(Biobase, testBioCConnection)
+ 
+-importFrom(BiocInstaller, biocinstallRepos)
+-
+ importFrom(XVector, subseq, "subseq<-")
+ importClassesFrom(Biostrings, "DNAStringSet")
+ importFrom(Biostrings, DNAStringSet, complement)
+diff --git a/R/getPackages.R b/R/getPackages.R
+index e4e9804..558d5ba 100644
+--- a/R/getPackages.R
++++ b/R/getPackages.R
+@@ -6,6 +6,7 @@ getCDF <- function(cdfname, lib=.libPaths()[1], verbose=TRUE){
+   attempt <- try(do.call(library, list(cdfname, lib.loc = lib)))
+   options(show.error.messages = TRUE)
+   if (inherits(attempt, "try-error")){
++     stop("Automatic CDF fetching disabled under nix. Install ", library," by hand")
+     
+     if(testBioCConnection()){
+       if(verbose)
+@@ -56,6 +57,7 @@ getProbePackage <- function(probepackage, lib=.libPaths()[1], verbose=TRUE){
+   options(show.error.messages = TRUE)
+   if (inherits(attempt, "try-error")){
+     
++     stop("Automatic CDF fetching disabled under nix. Install ", library," by hand")
+     if(testBioCConnection()){
+       if(verbose)
+         print("Checking to see if your internet connection works...")
