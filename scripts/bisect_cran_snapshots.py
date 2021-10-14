@@ -8,46 +8,57 @@ import datetime
 
 base_url = "https://mran.microsoft.com/snapshot/"
 
+# we are not using (only) the downloaded files in data/cran
+# because those are not the complete picture
+# (only fetched for relevant bioconductor dates...) 
+
+
+def get_data(date):
+    cache_file = cache_dir / common.format_date(date)
+    name_version = None
+    if not cache_file.exists():
+        json_file = Path("data/cran/packages/") / (
+            common.format_date(date) + ".json.gz"
+        )
+        if json_file.exists():
+            info = common.read_json(json_file)
+            print("using", json_file)
+            name_version = {x["name"]: x["version"] for x in info}
+        else:
+            print("fetch", date, end=" ")
+            r = requests.get(base_url + common.format_date(date) + "/src/contrib")
+            cache_file.write_text(r.text)
+    else:
+        print("had", date, end=" ")
+    if name_version is None:
+        raw = cache_file.read_text()
+        if "Internal Server Error" in raw:
+            raise ValueError()
+        tar_gz = [x for x in re.findall(">([^<]+)", raw) if x.endswith(".tar.gz")]
+        name_version = [x.split("_", 1) for x in tar_gz]
+        name_version = {x[0]: x[1] for x in name_version}
+    return name_version
+
 
 def extract_name_and_version(date):
-    cache_file = cache_dir / common.format_date(date)
-    if not cache_file.exists():
-        print("fetch", date, end = " ")
-        r = requests.get(base_url + common.format_date(date) + "/src/contrib")
-        cache_file.write_text(r.text)
-    else:
-        print('had', date, end=" ")
-    raw = cache_file.read_text()
-    if 'Internal Server Error' in raw:
-        raise ValueError()
-    tar_gz = [x for x in re.findall(">([^<]+)", raw) if x.endswith(".tar.gz")]
-    name_version = [x.split("_", 1) for x in tar_gz]
-    name_version = {x[0]: x[1] for x in name_version}
+    name_version = get_data(date)
     if name in name_version:
-        res =  name_version[name].replace(".tar.gz", "")
+        res = name_version[name].replace(".tar.gz", "")
     else:
-        res =  "0.0.0"
-    res =common.version_to_tuple_int(res)
+        res = "0.0.0"
+    res = common.version_to_tuple_int(res)
     print(res)
     return res
 
+
 def extract_existance(date):
-    cache_file = cache_dir / common.format_date(date)
-    if not cache_file.exists():
-        print("fetch", date)
-        r = requests.get(base_url + common.format_date(date) + "/src/contrib")
-        cache_file.write_text(r.text)
-    print('had', date)
-    raw = cache_file.read_text()
-    tar_gz = [x for x in re.findall(">([^<]+)", raw) if x.endswith(".tar.gz")]
-    name_version = [x.split("_", 1) for x in tar_gz]
-    name_version = {x[0]: x[1] for x in name_version}
+    name_version = get_data(date)
     if name in name_version:
+        print('found at', date)
         return 1
     else:
+        print('not found at', date)
         return 0
-
-
 
 
 cache_dir = Path("temp/bisect")
@@ -56,7 +67,7 @@ earliest = "2014-10-01"
 latest = common.format_date(datetime.date.today())
 
 s = sys.argv[1]
-if '_' in s:
+if "_" in s:
     name, version = s.split("_")
     version = common.version_to_tuple_int(version)
     print("looking for", name, version)
@@ -89,25 +100,34 @@ def bisect_left(a, x, lo, hi):
     """
 
     while lo < hi:
-        print('range', lo, hi, (hi-lo).days)
+        print("range", lo, hi, (hi - lo).days)
         mid = datemiddle(lo, hi)
         # Use __lt__ to match the logic in list.sort() and in heapq
         while True:
             try:
-                if a(mid) < x: lo = mid+datetime.timedelta(days=1)
-                else: hi = mid
+                if a(mid) < x:
+                    lo = mid + datetime.timedelta(days=1)
+                else:
+                    hi = mid
                 break
             except ValueError:
                 print("had to go a day to right", lo, hi, mid)
                 mid = mid + datetime.timedelta(days=1)
                 if mid > hi:
-                    raise ValueError("Went out of range while trying to find a valid value")
+                    raise ValueError(
+                        "Went out of range while trying to find a valid value"
+                    )
     return lo
 
 
 if version:
-    print(f'first rev with {version}', bisect_left(extract_name_and_version,
-            version, lower, upper))
+    print(
+        f"first rev with {version}",
+        bisect_left(extract_name_and_version, version, lower, upper),
+    )
 else:
-    print(f'first rev at all', bisect_left(extract_existance,
-            1, lower, upper))
+    when = bisect_left(extract_existance, 1, lower, upper)
+    if when < datetime.date.today():
+        print(f"first rev at all", when)
+    else:
+        print("either new today or not found")
