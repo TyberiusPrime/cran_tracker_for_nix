@@ -17,7 +17,7 @@ let
           ln -s $pkg/library/* $out/lib/R/library/
         fi
         if test -f $pkg/nix-support/r_links; then 
-          mapfile -d " " inputs < "$pkg/nix-support/r_links"
+          mapfile inputs < "$pkg/nix-support/r_links"
           for input in "''${inputs[@]}"
           do
             if [[ $input ]]; then 
@@ -55,7 +55,7 @@ let
         declare -A already_handled
 
         if [[ $nativeBuildInputs ]]; then
-          echo $nativeBuildInputs >$out/nix-support/r_links
+          echo $nativeBuildInputs| tr " " "\\n" >$out/nix-support/r_links
         fi
       '';
       postInstall = "";

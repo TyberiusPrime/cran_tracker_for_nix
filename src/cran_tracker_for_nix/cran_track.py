@@ -521,7 +521,7 @@ class CranTrack:
                         out = (name, version, info)
         if not out:
             return None
-        print("replaced", package)
+        # print("replaced", package)
         return {
             "name": out[0],
             "version": out[1],

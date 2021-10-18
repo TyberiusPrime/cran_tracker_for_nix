@@ -1,0 +1,36 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index 306a5cd..062a60c 100755
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -5,7 +5,7 @@ Title: GUI for limma package with Affymetrix microarrays
+ Author: James Wettenhall [cre,aut], Ken Simpson [aut], Gordon Smyth [aut], Keith Satterley [ctb], Yifang Hu [ctb]
+ Maintainer: Yifang Hu <hu@wehi.edu.au>, Gordon Smyth <smyth@wehi.edu.au>, Keith Satterley <keith@wehi.edu.au>
+ Imports: grDevices, graphics, stats, utils, tcltk, tkrplot, limma,
+-        affy, affyio, affyPLM, gcrma, BiocGenerics, BiocInstaller,
++        affy, affyio, affyPLM, gcrma, BiocGenerics,
+         R2HTML, xtable
+ Description: A Graphical User Interface for analysis of Affymetrix microarray gene expression data using the affy and limma packages.
+ License: GPL (>=2)
+diff --git a/NAMESPACE b/NAMESPACE
+index 8018915..489e280 100644
+--- a/NAMESPACE
++++ b/NAMESPACE
+@@ -17,4 +17,4 @@ importFrom("affy", "rma")
+ importFrom("gcrma", "gcrma")
+ importFrom("affyPLM", "fitPLM")
+ 
+-import(limma, tcltk, affy, BiocInstaller, affyio, tkrplot, affyPLM, R2HTML, xtable)
++import(limma, tcltk, affy, affyio, tkrplot, affyPLM, R2HTML, xtable)
+diff --git a/R/main.R b/R/main.R
+index 7c33436..f95b143 100755
+--- a/R/main.R
++++ b/R/main.R
+@@ -7,7 +7,7 @@ if(require(BiocInstaller)==FALSE){
+ 			type="ok"
+ 		)
+ 	} #end of if(interactive())
+-	stop("Cannot find package BiocInstaller")
++	warning("Cannot find package BiocInstaller")
+ } #end of if(require(BiocInstaller)==FALSE)
+ #
+ #
