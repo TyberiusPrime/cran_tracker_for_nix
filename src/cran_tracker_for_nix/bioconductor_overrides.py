@@ -873,6 +873,7 @@ inherit(  # start anew.
         "OrganismDbi": "needs biocInstaller",
         "pathifier": "needs princurve =2.0.4 available starting 2018-07-10",
         "permGPU": "build is broken, needs nvcc",
+        "qtpaint": "build failure",
         "psygenet2r": "needs biocinstaller",  # todo patch?
         "QuasR": "requires BiocInstaller",
         "randstr": "queries www.random.org",
@@ -1660,6 +1661,7 @@ inherit(
         "landsepi": ["gsl_1"],
         "jiebaRD": ["unzip"],
         "textTinyR": ["boost"],
+        "qtbase": ["qt4", "cmake", "(lib.getDev pkgs.libGL)"],
     },
     ["gmum.r",],
     copy_anyway=True,
@@ -1697,7 +1699,6 @@ inherit(
         "Segmentor3IsBack": ["which"],
         "ARRmData": ["which"],
         "dummy": ["which"],
-        "qtbase": ["qt4", "cmake", "(lib.getDev pkgs.libGL)"],
     },
     ["birte"],
     copy_anyway=True,
@@ -2441,7 +2442,7 @@ inherit(
         "kde1d": fix_strip,
         "RcppCWB": shebangs,
         "jiebaRD": {
-            "postInstall": "cd /build && find -name '*.zip' && aoeu \n"
+            "postInstall": "cd $out/library/jiebaRD/dict && unzip hmm_model.zip && unzip idf.zip && unzip jieba.dict.zip\n"
         },
         "V8": {
             "postPatch": 'substituteInPlace configure --replace " -lv8_libplatform" ""',
