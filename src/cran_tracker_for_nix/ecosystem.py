@@ -890,7 +890,7 @@ class REcoSystemDumper:
                             )
                         else:
                             op.write(
-                                f' {safe_name} = derive {{snapshot="ignored"; url = {format_nix_value(info["url"])};}}'
+                                f' {safe_name} = derive {{snapshot="ignored"; url = [{format_nix_value(info["url"])}];}}'
                                 ""
                             )
 

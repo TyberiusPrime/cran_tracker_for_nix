@@ -1,0 +1,13 @@
+diff --git a/src/vincenty.geodesics.c b/src/vincenty.geodesics.c
+index 31f2026..4abd3fc 100644
+--- a/src/vincenty.geodesics.c
++++ b/src/vincenty.geodesics.c
+@@ -7,7 +7,7 @@
+ #include <math.h>
+ 
+ //define some global constants
+-double a = 6378137, b = 6356752.3142,  f = 1/298.257223563;  // WGS-84 ellipsiod
++static const double a = 6378137, b = 6356752.3142,  f = 1/298.257223563;  // WGS-84 ellipsiod
+ 
+ /*
+  * Calculate destination point given start point lat/long (numeric degrees), 

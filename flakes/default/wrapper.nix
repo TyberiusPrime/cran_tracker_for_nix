@@ -41,15 +41,22 @@ let
       propagatedBuildInputs = subset;
       # propagatedNativeBuildInputs = subset;
 
-      unpackPhase = ":";
-      configurePhase = ":";
-      patchPhase = ":";
-      buildPhase = ":";
-      checkPhase = ":";
+      unpackPhase = "echo unpack \${#CMAKE_PREFIX_PATH}";
+      configurePhase = "echo configure \${#CMAKE_PREFIX_PATH}";
+      patchPhase = "echo patch \${#CMAKE_PREFIX_PATH}";
+
+      buildPhase = "echo build \${#CMAKE_PREFIX_PATH}";
+
+      checkPhase = "echo check \${#CMAKE_PREFIX_PATH}";
+
       #we tried findInputs, but that stopped working around 20.03
       #because the acc vars were undeclared before this phase
       preInstall = "";
       installPhase = ''
+        echo "here"
+        set
+        echo "end set"
+    #export CMAKE_PREFIX_PATH=""
         mkdir $out/nix-support -p
         mkdir $out/lib/R/library -p
         declare -A already_handled
