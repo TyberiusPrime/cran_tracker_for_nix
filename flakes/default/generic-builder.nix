@@ -1,4 +1,4 @@
-{ stdenv, R, xvfb_run, flock, utillinux }:
+{ stdenv, R, xvfb_run, flock, utillinux, pkgs }:
 
 { name, version, buildInputs ? [ ], additional_buildInputs ? [ ], patches ? [ ]
 , ... }@attrs:
@@ -61,10 +61,20 @@ in stdenv.mkDerivation ({
     runHook preInstall
     mkdir -p $out/library
     export SN=$(($RANDOM % 1000+1000))
-    echo "SN is " $SN
-    rCommand="flock ${aThousandLocks}/$SN xvfb-run  --server-num=$SN -e xvfb-error R"
-    echo $rCommand CMD INSTALL $installFlags --configure-args="$configureFlags" -l $out/library .
-    $rCommand CMD INSTALL $installFlags --configure-args="$configureFlags" -l $out/library .
+
+    # one shell script per level, or you go mad with escaping between
+    # flock -> xvbf-run -> (xvfb | R)
+    printf "#!%s\n" `${pkgs.which}/bin/which bash` > /build/run.sh
+    printf "%s" "xvfb-run --auth-file=/build/.Xauthority --error-file=/build/xvfb-error --server-args=\"-screen 0, 1024x768x24 +extension GLK\" --server-num=$SN /build/run_r.sh" > /build/run.sh
+
+    printf "#!%s\n" `${pkgs.which}/bin/which bash` > /build/run_r.sh
+    printf "%s" "R CMD INSTALL $installFlags --configure-args=\"$configureFlags\" -l $out/library ." >>/build/run_r.sh
+
+    chmod +x /build/run.sh
+    chmod +x /build/run_r.sh
+
+    flock ${aThousandLocks}/$SN /build/run.sh
+
     #remove date stamps
     echo "going for replacement"
     sed -i "s/^\(Built: R [0-9.]*\).*/\\1/" $out/library/${name}/DESCRIPTION

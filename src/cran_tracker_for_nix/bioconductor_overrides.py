@@ -213,7 +213,7 @@ nix_releases = {
         "18.03",
     ),
     "2018-10-05": (
-        "github:nixOS/nixpkgs=?rev=6a3f5bcb061e1822f50e299f5616a0731636e4e7",
+        "github:nixOS/nixpkgs?rev=6a3f5bcb061e1822f50e299f5616a0731636e4e7",
         "18.09",
     ),
     "2019-04-08": (
@@ -388,7 +388,7 @@ inherit(
         "RQuantLib": "hquantlib ( if that's even the right package) is broken in nixpgks 15.09)",
         "RSAP": "misssing sapnwrfc.h",
         "rsbml": "libsmbl isn't packagd in nixpkg ",
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        # "SDMTools": "all downstreams fail with  undefined symbol: X",
         "seqplots": "needs shiny.=0.11.0 which shows up on 2015-02-11",  # bc
         "SOD": "build broken without libOpenCL",
         "SSOAP": "(omegahat / github only?)",
@@ -480,7 +480,7 @@ inherit(
         "RSAP": "misssing sapnwrfc.h",
         "rsbml": "libsmbl isn't packagd in nixpkg ",
         "Rsymphony": ["pkgconfig", "doxygen", "graphviz", "subversion"],
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        # "SDMTools": "all downstreams fail with  undefined symbol: X",
         "SOD": "build broken without libOpenCL",
         "spectral.methods": "needs clusterify from Rssa which that package apperantly never had",
         "SSOAP": "(omegahat / github only?)",
@@ -573,7 +573,7 @@ inherit(  # start anew.
         "OpenCL": "needs OpenCL, not available in nixpkgs 15.09",
         "iptools": "can't find boost::regex",
         "cudaBayesreg": "build is broken, needs nvcc",
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        # "SDMTools": "all downstreams fail with  undefined symbol: X",
         "stringi": "Wants to download icudt55l.zip",
         "rsbml": "libsmbl isn't packagd in nixpkg ",
         "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
@@ -707,7 +707,7 @@ inherit(  # start anew.
         "rsbml": "libsmbl isn't packagd in nixpkg",
         "RSQLServer": "object 'src_translate_env' is not exported by 'namespace:dplyr', try after 2017-06-09 for newer dpylr",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",  # that does come back up eventually, judging from 21.03
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        # "SDMTools": "all downstreams fail with  undefined symbol: X",
         "SnakeCharmR": "needs python",  # Todo
         "SVGAnnotation": "github only?",
         "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
@@ -805,7 +805,7 @@ inherit(  # start anew.
         "rsbml": "libsmbl isn't packagd in nixpkg",
         "rstan": "template error",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        # "SDMTools": "all downstreams fail with  undefined symbol: X",
         "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
         "tesseract": "missing baseapi.h?",
         "textTinyR": "boost trouble",  # todo
@@ -895,7 +895,7 @@ inherit(  # start anew.
         "rsunlight": "object 'ignore.case' is not exported by 'namespace:stringr'. Try after 2018-05-10",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
         "rTANDEM": "cpp error",
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        # "SDMTools": "all downstreams fail with  undefined symbol: X",
         "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
         "V8": "v8 version mismatch between R package and nixpkgs",
         "x12": "'error: argument is of length zero'?",
@@ -931,15 +931,112 @@ inherit(
 )
 
 inherit(
-    excluded_packages, ("3.8", "2018-11-12"), {}, ["ReporteRsjars"],
+    excluded_packages,
+    "3.8",  # start anew. # 2018-10-31
+    {
+        "cran--mixOmics": "newer in bioconductor",
+        "ReporteRs": "fgmutils 0.9.4 needs that,though ReporteRs (and ReporteRsjars) is no longer in CRAN",
+        "nloptr": "undefined symbol:  nlopt_set_ftol_abs- version mismatch?",  # todo: I suspect something different behind this
+        "Rmosek": "needs 'mosek', unavailable",
+        "cudaBayesreg": "build is broken, needs nvcc",
+        "pbdSLAP": "build is broken with mpi trouble",
+        # "ReporteRsjars": "no longer in CRAN",
+        "anyLib": "needs BiocInstaller",
+        "HBP": "needs BiocInstaller",
+        "yearn": "needs BiocInstaller",  # todo patch
+        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
+        "HMP16SData": "tries to talk to hub",  # todo: patch
+        "DuoClustering2018": "tries to talk to hub",  # todo: patch
+        "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
+        "ggtree": "object 'as_tibble' is not exported by 'namespace:tidytree",  # todo: find out when  it's back...
+        "fulltext": "wants to write into home",
+        "GEOquery": "needs readr >= 1.3.1, try after 2018-12-22",
+        "multiMiR": "Could not resolve host: multimir.ucdenver.edu",
+        "greengenes13.5MgDb": 'invalid class "MgDb" object: 1: invalid object for slot "taxa" in class "MgDb":',
+        "silva128.1MgDb": 'invalid class "MgDb" object: 1: invalid object for slot "taxa" in class "MgDb":',
+        "ribosomaldatabaseproject11.5MgDb": 'error: invalid class "MgDb" object: 1: invalid object for slot "taxa" in class "MgDb": got class "tbl_dbi",',  # todo This might work again when metagenomeFatures is updated? some time after 2019-01-31...
+        "GENEAsphere": "object 'epoch.apply' is not exported by 'namespace:GENEAread, try after 2018-11-16",
+        "TabulaMurisData": "tries to talk to hub",  # todo: patch
+        "HierO": "can't find BWidget",
+        "interactiveDisplay": "tries to access bioconductor.org",
+        "BiocSklearn": "needs python&sklearn",
+        "dSimer": "no matching function for call to 'std::tr1::unordered_map<std::__cxx11::basic_string<char, float>::ins",  # and no update within this release
+        "flipflop": "cpp template error",
+        "h2o": "tries to download from s3",
+        "units": "needs udunits2 but only udunits is in nixpkgs",
+        "udunits2": "needs udunits2 but only udunits is in nixpkgs",
+        "rPython": "needs a python",
+        "freetypeharfbuzz": "Downloads from github",
+        "clpAPI": "missing clp library",
+        "devEMF": "undefined symbol: XftCharExists",
+        "googleformr": "attempts to contact docs.google.com",
+        "gpuR": "needs opencl",
+        "h5": "no hdf5.dev in this nixpkgs",
+        "kazaam": "mpi trouble",
+        "kmcudaR": "build is broken, needs nvcc",
+        "OpenCL": "needs OpenCL, not available in nixpkgs 18.09",
+        "permGPU": "build is broken, needs nvcc",
+        "randstr": "queries www.random.org",
+        "Rcplex": "'This nix expression requires that the cplex installer is already downloaded to your machine. Get it from IBM:'. Antihermetic",
+        "RcppAPT": "needs APT/Debian system",
+        "RcppMeCab": "undefined symbol: mecab_destroy",
+        "RGtk2": "needs gtk 2.8, nixpkgs 18.09 has 2.24",
+        "Rhdf5lib": " no libhdf5.a found",
+        "RKEELjars": "downloads jars from github",
+        "Rblpapi": "Missing blpaip3",
+        "rlo": "needs python&numpy",
+        "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
+        "ROracle": "OCI libraries not found",
+        "rpanel": "can't find BWidget",
+        "RQuantLib": "hquantlib is a haskell package - don't think that's what's required?",
+        "rsbml": "libsmbl isn't packagd in nixpkg",
+        "Rsymphony": "can't find SYMPHONY in nixpkgs",
+        "rTANDEM": "cpp error",
+        "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
+        "x12": "'error: argument is of length zero'?",
+        # "multibiplotGU" "gWidgets2tcltk": ' [tcl] invalid command name "font".',
+        # "gWidgetstcltk": ' [tcl] invalid command name "font".',
+        # "optbdmaeAT": '[tcl] invalid command name "font".',
+        # "optrcdmaeAT": '[tcl] invalid command name "font".',
+        "bgx": "c error",
+        "qtpaint": "build failure, can't find -lstd?",
+    },
 )
+inherit(excluded_packages, ("3.8", "2018-11-16"), {}, ["GENEAsphere"])
+inherit(excluded_packages, ("3.8", "2018-12-22"), {}, ["GEOquery"])
 
 inherit(  # start anew. - 2019-03-05
-    excluded_packages, ("3.9"), {},
-)
-
-inherit(  # start anew. # 2018-10-31
-    excluded_packages, ("3.8"), {"cran--mixOmics": "newer in bioconductor",},
+    excluded_packages,
+    ("3.9"),
+    {
+        "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
+        "clpAPI": "missing clp library",
+        "randstr": "queries www.random.org",
+        "rlo": "needs python&numpy",
+        "RQuantLib": "hquantlib is a haskell package - don't think that's what's required?",
+        "ROracle": "OCI libraries not found",
+        "RcppAPT": "needs APT/Debian system",
+        # "devEMF": "undefined symbol: XftCharExists",
+        # "googleformr": "attempts to contact docs.google.com",
+        # "gpuR": "needs opencl",
+        # "h5": "no hdf5.dev in this nixpkgs",
+        # "kazaam": "mpi trouble",
+        # "kmcudaR": "build is broken, needs nvcc",
+        # "OpenCL": "needs OpenCL, not available in nixpkgs 18.09",
+        # "permGPU": "build is broken, needs nvcc",
+        ##"Rcplex": "'This nix expression requires that the cplex installer is already downloaded to your machine. Get it from IBM:'. Antihermetic",
+        ##"RcppMeCab": 'undefined symbol: mecab_destroy',
+        # "RGtk2": "needs gtk 2.8, nixpkgs 18.09 has 2.24"
+        # "Rhdf5lib": " no libhdf5.a found",
+        # "RKEELjars": "downloads jars from github",
+        # "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
+        # "rpanel": "can't find BWidget",
+        # "rsbml": "libsmbl isn't packagd in nixpkg",
+        # "Rsymphony": "can't find SYMPHONY in nixpkgs",
+        # "rTANDEM": "cpp error",
+        # "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
+        # "x12": "'error: argument is of length zero'?",
+    },
 )
 
 inherit(  # start anew.
@@ -984,7 +1081,7 @@ inherit(  # start anew.
         "rsbml": "libsmbl isn't packagd in nixpkg",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
         "salso": "downloads from dbdahl.github.io",
-        "SDMTools": "all downstreams fail with  undefined symbol: X",
+        # "SDMTools": "all downstreams fail with  undefined symbol: X",
         "SeqKat": "hard coded /usr/bin/strip",
         # "stringi": "Wants to download icudt55l.zip",
         # "stringi": "Wants to download icudt61l.zip",
@@ -1239,7 +1336,7 @@ inherit(
         "cairoDevice": ["gtk2"],
         "Cairo": ["libtiff", "libjpeg", "cairo"],
         "CARramps": ["pkgs.linuxPackages.nvidia_x11", "liblapack"],
-        "chebpol": ["fftw"],
+        "chebpol": ["fftw", "pkgconfig"],
         "ChemmineOB": ["openbabel", "pkgconfig"],
         "cit": ["gsl"],
         "Crossover": ["which"],
@@ -1372,7 +1469,6 @@ inherit(
         "SJava": ["jdk"],
         "snpStats": ["zlib"],
         "SOD": ["cudatoolkit"],
-        "spate": ["fftw"],
         "sprint": ["openmpi"],
         "ssanv": ["proj"],
         "STARSEQ": ["zlib"],
@@ -1639,7 +1735,16 @@ inherit(
         "RMariaDB": ["zlib", "pkgs.mysql.connector-c", "openssl"],
         "Rbowtie2": ["zlib"],
         "JMcmprsk": ["gsl_1"],
-        "RcppCWB": ["pcre", "glib", "pkgconfig", "ncurses", "which", "bison", "utillinux", "flex"],
+        "RcppCWB": [
+            "pcre",
+            "glib",
+            "pkgconfig",
+            "ncurses",
+            "which",
+            "bison",
+            "utillinux",
+            "flex",
+        ],
         "SeqKat": ["binutils"],
         "ISOpureR": ["binutils"],
         "redux": ["hiredis", "pkgconfig"],
@@ -1675,7 +1780,45 @@ inherit(
 )
 
 
-inherit(native_build_inputs, "3.8", {}, ["flowQ", "rcqp"], copy_anyway=True)
+inherit(
+    native_build_inputs,
+    "3.8",
+    {
+        "BALD": ["pkgconfig", "jags", "pcre", "lzma", "bzip2", "zlib", "icu"],
+        "bioacoustics": ["cmake", "fftw", "soxr"],
+        "cairoDevice": ["gtk2", "pkgconfig"],
+        "chebpol": ["fftw", "pkgconfig", "gsl_1"],
+        "DRIP": ["gsl_1"],
+        "fftw": ["pkgconfig", "pkgs.fftw.dev"],
+        "GENEAsphere": [
+            "mesa_glu",
+        ],  # which might allow +extension GLX to work on xvfb
+        "geoCount": ["gsl_1", "pkgconfig"],
+        "haven": ["zlib"],
+        "hipread": ["zlib"],
+        "ijtiff": ["which", "libtiff", "pkgconfig"],
+        "msgl": ["binutils"],
+        "mwaved": ["pkgconfig", "fftw"],
+        "phateR": ["which"],
+        "RCurl": ["pkgconfig", "curl"],
+        "rgl": ["libGLU", "mesa_glu", "x11"],
+        "ssh": ["libssh"],
+        "qtpaint": ["qt4", "cmake"],
+        "Rmagic": ["which"],
+        "rpf": ["pkgconfig"],
+        "rrd": ["rrdtool"],
+        "rscala": ["scala", "which"],
+        "sglOptim": ["binutils"],
+        "shinytest": ["which"],
+        "spate": ["pkgconfig", "fftw"],
+        "V8": ["v8_3_14"],
+        "vapour": ["pkgconfig", "gdal", "proj", "geos"],
+        "waved": ["fftw"],
+        "wdm": ["binutils"],
+    },
+    ["flowQ", "rcqp"],
+    copy_anyway=True,
+)
 inherit(native_build_inputs, ("3.8", "2018-11-05"), {"lattice": ["which"]})  # 0.20-38
 inherit(native_build_inputs, ("3.8", "2018-12-25"), {"codetools": ["which"]})  # 0.2-16
 inherit(
@@ -1720,26 +1863,12 @@ inherit(
     "3.10",
     {
         "apcf": ["gdal_2", "geos"],
-        "BALD": ["jags", "pcre", "lzma", "bzip2", "zlib", "icu"],
-        "ijtiff": ["libtiff"],
         "bbl": ["gsl_1"],
-        "cairoDevice": ["gtk2", "pkgconfig"],
-        # "Cairo": [
-        #     "pkgconfig",
-        #     "libtiff",
-        #     "libjpeg",
-        #     "cairo",
-        #     "x11",
-        #     "fontconfig",
-        # ],
         "data.table": ["zlib"],
         "DRIP": ["gsl_1"],
-        "fftw": ["pkgconfig", "pkgs.fftw.dev"],
         "fftwtools": ["pkgs.fftw.dev"],
         "gdalcubes": ["pkgconfig", "gdal", "proj", "curl", "sqlite"],
         "gsl": ["gsl"],  # might need 2?
-        # "h5": ["hdf5"],
-        "haven": ["zlib"],
         "hdf5r": ["hdf5"],
         "hipread": ["zlib"],
         "hSDM": ["gsl_1"],
@@ -1747,7 +1876,6 @@ inherit(
         "KFKSDS": ["pkgconfig", "gsl_1"],
         "LCMCR": ["gsl_1"],
         "Libra": ["gsl_1"],
-        "mwaved": ["pkgconfig", "fftw"],
         "odbc": ["libiodbc"],
         "opencv": ["opencv3"],
         "openssl": ["pkgs.openssl", "pkgs.openssl.out"],
@@ -1756,7 +1884,6 @@ inherit(
         "Rbowtie": ["zlib"],
         "RcppMeCab": ["mecab"],
         "rtmpt": ["gsl_1"],
-        "RCurl": ["pkgconfig", "curl"],
         "RGtk2": ["pkgconfig", "pkgs.gtk2.dev"],
         "Rhdf5lib": ["zlib"],
         "RMariaDB": ["zlib", "pkgs.mysql.connector-c", "openssl"],
@@ -1768,19 +1895,15 @@ inherit(
         "rscala": ["scala"],
         "rtk": ["zlib"],
         "scModels": ["mpfr"],
-        "ssh": ["libssh"],
         "spate": ["pkgconfig", "fftw"],
         "systemfonts": ["fontconfig"],
         "udunits2": ["udunits", "expat"],
         "ulid": ["zlib"],
         "units": ["udunits"],
         "unrtf": ["pcre", "lzma", "bzip2", "zlib", "icu"],
-        "vapour": ["gdal"],
         "websocket": ["openssl"],
         "writexl": ["zlib"],
-        "bioacoustics": ["cmake", "fftw", "soxr"],
         "infercnv": ["python"],
-        "rgl": ["libGLU", "mesa", "x11"],
         # "Rcwl": ["cwltool"],
         "netboost": ["perl"],
         "Rsampletrees": ["gsl_1"],
@@ -1885,7 +2008,6 @@ inherit(
         "cairoDevice": ["pkgconfig"],
         "Cairo": ["pkgconfig"],
         "CARramps": ["which", "cudatoolkit"],
-        "chebpol": ["pkgconfig"],
         "dti": ["which", "pkgs.xorg.xdpyinfo", "imagemagick"],
         "ecoretriever": ["which"],
         "flowQ": [
@@ -2124,6 +2246,9 @@ inherit(
         "Rserve": [nl("./../patches/Rserve.patch")],
         "spMC": [nl("./../patches/spMC.patch")],
         "WideLM": [nl("./../patches/WideLM.patch")],
+        "SDMTools": [
+            nl("./../patches/SDMTools.patch")
+        ],  # see http://dsludwig.github.io/2019/02/12/building-up-to-something.html
     },
 )
 
@@ -2173,17 +2298,12 @@ inherit(patches, "3.6", {}, copy_anyway=True)
 inherit(
     patches,
     "3.7",
-    {
-        "SDMTools": [
-            nl("./../patches/SDMTools.patch")
-        ],  # see http://dsludwig.github.io/2019/02/12/building-up-to-something.html
-        "tesseract": [nl("./../patches/tesseract.patch")],
-    },
+    {"tesseract": [nl("./../patches/tesseract.patch")],},
     ["EMCluster", "BayesBridge", "gmatrix", "gputools", "BayesXsrc",],
     copy_anyway=True,
 )
 inherit(
-    patches, "3.8", {}, [], copy_anyway=True,
+    patches, "3.8", {}, ["affy", "gcrma", "affylmGUI", "webbioc"], copy_anyway=True,
 )
 inherit(patches, "3.9", {}, copy_anyway=True)
 inherit(
@@ -2444,14 +2564,6 @@ inherit(
         "jiebaRD": {
             "postInstall": "cd $out/library/jiebaRD/dict && unzip hmm_model.zip && unzip idf.zip && unzip jieba.dict.zip\n"
         },
-        "V8": {
-            "postPatch": 'substituteInPlace configure --replace " -lv8_libplatform" ""',
-            "preConfigure": """
-        export INCLUDE_DIR=${pkgs.v8}/include
-        export LIB_DIR=${pkgs.v8}/lib
-        patchShebangs configure
-      """,
-        },
         "openssl": dict_add(
             shebangs,
             {
@@ -2471,7 +2583,23 @@ inherit(
 )
 
 inherit(
-    attrs, "3.8", {}, ["Mposterior"], copy_anyway=True,
+    attrs,
+    "3.8",
+    {
+        "pdftools": shebangs,
+        "ps": shebangs,
+        "freetypeharfbuzz": shebangs,
+        "msgl": fix_strip,
+        "ssh": shebangs,
+        "rlang": shebangs,
+        "sglOptim": fix_strip,
+        "wdm": fix_strip,
+        "ijtiff": shebangs,
+        "rPython": shebangs,
+        "DeLorean": shebangs,
+    },
+    ["Mposterior", "rpf"],
+    copy_anyway=True,
 )
 inherit(attrs, "3.9", {}, copy_anyway=True)
 inherit(
@@ -2484,11 +2612,8 @@ inherit(
             "JAGS_INCLUDE": "${pkgs.jags}/include/JAGS",
             "JAGS_LIB": "${pkgs.jags}/lib",
         },
-        "DeLorean": shebangs,
-        "freetypeharfbuzz": shebangs,
         "gifski": shebangs,
         "gert": shebangs,
-        "ijtiff": shebangs,
         "JuniperKernel": shebangs,
         "opencv": shebangs,
         # "openssl": { "OPENSSL_INCLUDES": "${pkgs.openssl}/include", "LD_LIBRARY_PATH": '"${pkgs.openssl.out}/lib";', },
@@ -2499,8 +2624,6 @@ inherit(
                 "PKGCONFIG_LIBS": "-Wl,-rpath,${pkgs.openssl.out}/lib -L${pkgs.openssl.out}/lib -lssl -lcrypto",
             },
         ),
-        "pdftools": shebangs,
-        "ps": shebangs,
         # "RcppCWB": shebangs,
         "RcppGetconf": shebangs,
         "RcppParallel": shebangs,
