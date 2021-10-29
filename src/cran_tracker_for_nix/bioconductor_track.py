@@ -19,6 +19,7 @@ import re
 import datetime
 import gzip
 import json
+import bisect
 import yaml
 import io
 from typing import Tuple
@@ -400,12 +401,7 @@ class BioconductorRelease:
         all_dates = set()
         for package, version_dates in self.load_archive().items():
             for _version, a_date in version_dates:
-                all_dates.add(
-                    datetime.datetime.strptime(
-                        a_date,
-                        "%Y-%m-%d",
-                    ).date()
-                )
+                all_dates.add(datetime.datetime.strptime(a_date, "%Y-%m-%d",).date())
         if all(x > date for x in all_dates):  # release date, or shortly after?
             all_dates.add(date)
         candidates = sorted([x for x in all_dates if x <= date])
@@ -460,7 +456,17 @@ class BioconductorRelease:
             }
         return out
 
-    def get_packages(self, kind, archive_date):
+    def get_packages(self, kind, query_date):
+        def find_right_archive_date(archive_dates, query_date):
+            """take archive_dates -> version, return version to use"""
+            o = sorted(archive_dates.keys())
+            i = bisect.bisect_left(o, query_date)
+            if i < len(o):
+                return archive_dates[o[i]]
+            else:  # beyond latest archived date?
+                raise ValueError()
+                return archive_dates[o[-1]]
+
         if kind in ("experiment", "annotation", "software"):
             if kind == "software":
                 akind = "bioc"
@@ -496,18 +502,26 @@ class BioconductorRelease:
                         raise ValueError(
                             f"Package {package} in archive that was not in PACKAGES.gz"
                         )
+                archive_dates = {
+                    datetime.datetime.strptime(date, "%Y-%m-%d").date(): v
+                    for (v, date) in version_dates
+                }
+                result[package]["version"] = find_right_archive_date(
+                    archive_dates, query_date
+                )
+                result[package]["archive"] = True
 
-                for version, date in sorted(version_dates, key=lambda vd: vd[1]):
-                    date = datetime.datetime.strptime(date, "%Y-%m-%d").date()
-                    if date <= archive_date:
-                        result[package]["version"] = version
-                        result[package]["archive"] = True
+        adr = bioconductor_overrides.additional_r_dependencies.get(
+            self.str_version, {}
+        ).get(kind, {})
 
-        for name, add_deps in (
-            bioconductor_overrides.additional_r_dependencies.get(self.str_version, {})
-            .get(kind, {})
-            .items()
-        ):
+        dadr = set(adr.keys()).difference(result.keys())
+        if dadr:
+            raise ValueError(
+                f"additional_r_dependencies for {kind} that are not in {kind}: {sorted(dadr)}"
+            )
+
+        for name, add_deps in adr.items():
             result[name]["depends"] += add_deps
 
         for entry in self.patch_packages.get(kind, []):
@@ -629,10 +643,12 @@ class BioconductorRelease:
                 release_info=self.release_info,
             )
             for pkg_name, deps in nbi.items():
-                if pkg_name not in all_packages and pkg_name not in excluded:
+                if pkg_name not in graph.nodes and pkg_name not in excluded:
                     errors.append(
                         f"package with {what} but not in graph or excluded: {pkg_name} {date}"
                     )
+                    continue
+                if pkg_name in excluded:
                     continue
                 if not isinstance(deps, (list)) and not is_nix_literal(deps):
                     raise ValueError(nbi, pkg_name, "must be list")
@@ -679,9 +695,7 @@ class BioconductorRelease:
         if errors:
             # print(sorted(all_packages.keys()))
             # print(excluded)
-            raise ValueError(
-                "\n".join(errors),
-            )
+            raise ValueError("\n".join(errors),)
 
         # extra special magic for samtools injecting zlib
         for node in graph.successors("Rsamtools"):
