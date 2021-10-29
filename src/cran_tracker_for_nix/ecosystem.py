@@ -221,8 +221,7 @@ class REcoSystem:
         res = set()
         for bioc_release in self.bcvs.values():
             dates = bioc_release.get_cran_dates(
-                self.ct,
-                self.r_track,
+                self.ct, self.r_track,
             )  # that's a set of (archive_date, snapshot_date)
             start = bioc_release.release_info.start_date
             end = bioc_release.release_info.end_date
@@ -309,10 +308,7 @@ class REcoSystemDumper:
 
         def dump_excluded_packages(output_filename):
             output_filename.write_text(
-                json.dumps(
-                    self.package_info["excluded_packages_notes"],
-                    indent=2,
-                )
+                json.dumps(self.package_info["excluded_packages_notes"], indent=2,)
             )
 
         job_excluded_packages = (
@@ -327,8 +323,7 @@ class REcoSystemDumper:
             output_path / "generated" / "cran-packages.nix",
         ).depends_on(job_fill_flake, job_packages)
         job_bioc_software = self.dump_bioc_packages(
-            "bioc_software",
-            output_path / "generated" / "bioc-packages.nix",
+            "bioc_software", output_path / "generated" / "bioc-packages.nix",
         ).depends_on(job_fill_flake, job_packages)
         job_bioc_experiment = self.dump_bioc_packages(
             "bioc_experiment",
@@ -354,12 +349,7 @@ class REcoSystemDumper:
         )
 
         def dump_downgrades(output_file, downgrades=downgrades):
-            output_file.write_text(
-                json.dumps(
-                    downgrades,
-                    indent=2,
-                )
-            )
+            output_file.write_text(json.dumps(downgrades, indent=2,))
 
         job_downgrades = ppg2.FileGeneratingJob(
             output_path / "downgraded_packages.json", dump_downgrades, empty_ok=True
@@ -386,9 +376,28 @@ class REcoSystemDumper:
                 self.package_info["all_packages"]
             )
             test_jobs = []
-            for ii, package_set in enumerate(
-                reversed(disjoint_package_sets)
-            ):  # start with the big ones.
+            # a bit of awful parameterize by args,
+            # just to get the total loop of 'will this build' faster
+            if (
+                "--all" in sys.argv
+            ):  # that's not how you want to test (you want to catch missing dependency,
+                # at least sometimes. but it is handy to check all packages that need a 'which' or such...
+                r = [list(self.package_info["all_packages"])]
+            elif "--reverse" in sys.argv:
+                r = disjoint_package_sets
+            else:
+                r = list(reversed(disjoint_package_sets))
+            if any([x.startswith("--skip=") for x in sys.argv]):
+                s = [x for x in sys.argv if x.startswith("--skip=")][0]
+                skip = int(s[s.find("=") + 1 :])
+            else:
+                skip = None
+
+            print("no of packages set", len(r), "skip", skip)
+            for ii, package_set in enumerate(r):  # start with the big ones.
+                if skip is not None and ii < skip:
+                    print("skip", ii, skip)
+                    continue
                 test_path = (
                     output_path_top_level
                     / "builds"
@@ -398,9 +407,7 @@ class REcoSystemDumper:
                 test_path.mkdir(exist_ok=True, parents=True)
 
                 def run_test(
-                    output_file,
-                    package_set=package_set,
-                    test_path=test_path,
+                    output_file, package_set=package_set, test_path=test_path,
                 ):
                     self.test_package_set_build(
                         Path(__file__).parent.parent.parent.parent
@@ -439,7 +446,7 @@ class REcoSystemDumper:
                         )
                     )
                 )
-                if test_jobs:
+                if skip is None and test_jobs:
                     j.depends_on(test_jobs[-1])  # make them run in a chain
                 test_jobs.append(j)
 
@@ -570,12 +577,14 @@ class REcoSystemDumper:
                     raise ValueError(
                         f"but {m} was not in graph (superflous excluded_packages entry)"
                     )
-            for name in to_remove:
+            for name in sorted(to_remove):
                 graph.remove_node(name)
             were_excluded = to_remove
             to_remove = set()
 
-            missing = set(graph.nodes).difference(all_packages)
+            missing = (
+                set(graph.nodes).difference(all_packages).difference(were_excluded)
+            )
             for m in missing:
                 if m in bl:
                     raise NotImplementedError("Do not expect this to happen", m)
@@ -600,6 +609,10 @@ class REcoSystemDumper:
                     all_packages[m]["snapshot"] = replacement["snapshot"]
 
                     for d in all_packages[m]["depends"]:
+                        if d in were_excluded:
+                            # print("have to remove again", d, m)
+                            to_remove.add(d)
+                            to_remove.add(m)
                         graph.add_edge(d, m)
             for name in to_remove:
                 graph.remove_node(name)
@@ -614,16 +627,17 @@ class REcoSystemDumper:
                         (m, list(graph.successors(m)), list(graph.predecessors(m)))
                     )
                 raise ValueError(
-                    "missing dependencies in graph", pprint.pformat(message)
+                    "missing dependencies in graph (ie. somebody depends on them, but they ain't here)",
+                    pprint.pformat(message),
                 )
-
             self.bioc_release.patch_native_dependencies(
                 graph, all_packages, were_excluded, self.archive_date
             )
 
             all_packages = {
                 k: all_packages[k] for k in sorted(graph.nodes)
-            }  # enforce deterministic output order
+            }  # enforce deterministic output order, and filter removed from all_packages
+
             excluded_packages_notes = {
                 k: excluded_packages_notes[k] for k in sorted(excluded_packages_notes)
             }  # enforce deterministic output order
@@ -728,9 +742,7 @@ class REcoSystemDumper:
             ]
             input_files.extend(override_input_files)
 
-        def generate(
-            output_files,
-        ):
+        def generate(output_files,):
             self.clear_output(output_path)
             if not source_path.exists():
                 raise ValueError("No flake source found")
@@ -951,8 +963,8 @@ class REcoSystemDumper:
             "--show-trace",
             "--verbose",
             "--max-jobs",
-            "auto",
-            # str(ppg2.util.CPUs()),
+            # "auto",
+            str(ppg2.util.CPUs()),
             # "1",
             "--cores",
             "4",  # it's pretty bad at using the cores either way, so let's oversubscribe ab it...
@@ -1160,7 +1172,7 @@ def main():
                     reco.dump(output_toplevel / format_date(archive_date))
                     last = k
         elif re.match(r"^\d+\.\d+[+]?", query_date):
-            if query_date.endswith('+'):
+            if query_date.endswith("+"):
                 use_all = True
                 query_date = query_date[:-1]
             else:

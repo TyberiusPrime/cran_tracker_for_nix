@@ -374,10 +374,7 @@ class CranTrack:
 
         def gen_download_and_hash():
             (self.store_path / "sha256").mkdir(exist_ok=True)
-            for (
-                (name, version),
-                info,
-            ) in self.assemble_all_packages().items():
+            for ((name, version), info,) in self.assemble_all_packages().items():
 
                 def do(
                     output_filenames,
@@ -396,8 +393,7 @@ class CranTrack:
                     if (name, version) in self.manual_url_overrides:
                         url = self.manual_url_overrides[name, version]
                         hash_url(
-                            url=url,
-                            path=output_filenames["sha256"],
+                            url=url, path=output_filenames["sha256"],
                         )
                         output_filenames["url"].write_text(url)
                     else:
@@ -411,8 +407,7 @@ class CranTrack:
                             try:
                                 url = f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz"
                                 hash_url(
-                                    url,
-                                    path=output_filenames["sha256"],
+                                    url, path=output_filenames["sha256"],
                                 )
                                 output_filenames["url"].write_text(url)
                                 break
@@ -457,11 +452,7 @@ class CranTrack:
             bioc_str_version, {}
         ).get("cran", {})
 
-        for (
-            name,
-            version,
-            info,
-        ) in package_info:
+        for (name, version, info,) in package_info:
             pkg_date = parse_date(info["start_date"])
             if pkg_date <= snapshot_date:
                 pkg_end_date = info["end_date"]
@@ -482,6 +473,15 @@ class CranTrack:
                         "needs_compilation": info["needs_compilation"],
                         "snapshot": snapshot_date,
                     }
+        too_much_additional_deps = set(additional_dependencies.keys()).difference(
+            result
+        )
+        if too_much_additional_deps:
+            raise ValueError(
+                "CRAN packages in additional_dependencies that are not in cran",
+                sorted(too_much_additional_deps),
+            )
+
         downgrades = match_override_keys(
             bioconductor_overrides.downgrades, "-", snapshot_date, release_info=False
         )

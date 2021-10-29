@@ -14,17 +14,20 @@ let
          mkdir $out/$i
       done
     '';
-    propagatedNativeBuildInputs = [xvfb_run flock];
-    propagatedBuildInputs = [xvfb_run];
   });
 
 in stdenv.mkDerivation ({
   name = name + "-" + version;
-  buildInputs = buildInputs ++ [ R ]
-    #++ stdenv.lib.optionals attrs.requireX [ utillinux xvfb_run ]
+  buildInputs = buildInputs ++ [
+    R
+  ]
+  #++ stdenv.lib.optionals attrs.requireX [ utillinux xvfb_run ]
     ++ additional_buildInputs
     ++ (if attrs.requireX then [ aThousandLocks ] else [ ]);
+
   patches = patches;
+
+  nativeBuildInputs = (if attrs.requireX then [ xvfb_run flock ] else [ ]);
 
   configurePhase = ''
     runHook preConfigure
@@ -38,6 +41,7 @@ in stdenv.mkDerivation ({
   '';
 
   installFlags = (if attrs.doCheck or true then [ ] else [ "--no-test-load" ])
+    ++ (if builtins.hasAttr "installFlags" attrs then attrs.installFlags else [ ])
     ++ [
       "--byte-compile"
       "--with-keep.source"
@@ -65,7 +69,7 @@ in stdenv.mkDerivation ({
     # one shell script per level, or you go mad with escaping between
     # flock -> xvbf-run -> (xvfb | R)
     printf "#!%s\n" `${pkgs.which}/bin/which bash` > /build/run.sh
-    printf "%s" "xvfb-run --auth-file=/build/.Xauthority --error-file=/build/xvfb-error --server-args=\"-screen 0, 1024x768x24 +extension GLK\" --server-num=$SN /build/run_r.sh" > /build/run.sh
+    printf "%s" "${pkgs.xvfb_run}/bin/xvfb-run -f /build/.Xauthority -e /build/xvfb-error -s \"-screen 0, 1024x768x24 +extension GLK\" -n $SN /build/run_r.sh" > /build/run.sh
 
     printf "#!%s\n" `${pkgs.which}/bin/which bash` > /build/run_r.sh
     printf "%s" "R CMD INSTALL $installFlags --configure-args=\"$configureFlags\" -l $out/library ." >>/build/run_r.sh
@@ -73,7 +77,7 @@ in stdenv.mkDerivation ({
     chmod +x /build/run.sh
     chmod +x /build/run_r.sh
 
-    flock ${aThousandLocks}/$SN /build/run.sh
+    ${pkgs.flock}/bin/flock ${aThousandLocks}/$SN /build/run.sh
 
     #remove date stamps
     echo "going for replacement"
