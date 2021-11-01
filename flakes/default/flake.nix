@@ -22,10 +22,11 @@
               R = super.R.overrideDerivation (old: rec {
                 pname = "R";
                 version = "3.1.3";
+                major_version = builtins.substring 0 1 version;
                 name = pname + "-" + version;
 
                 src = pkgs.fetchurl {
-                  url = "http://cran.r-project.org/src/base/R-3/${name}.tar.gz";
+                  url = "http://cran.r-project.org/src/base/R-${major_version}/${name}.tar.gz";
                   sha256 =
                     "04kk6wd55bi0f0qsp98ckjxh95q2990vkgq4j83kiajvjciq7s87";
                 };

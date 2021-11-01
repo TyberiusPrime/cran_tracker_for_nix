@@ -298,22 +298,29 @@ class BioconductorRelease:
             return []
 
         def download(outfilename):
-            base = self.base_url + "bioc/src/contrib/"
+            base = (
+                self.base_urls[0] + "bioc/src/contrib/"
+            )  # dortmund has a different layout
             packages = {}
-            for hit in re.findall(
-                'href="([^/][^/]+)/"', requests.get(base + "Archive").text
-            ):
+            r1 = requests.get(base + "Archive")
+            r1.raise_for_status()
+            for hit in re.findall('href="([^/][^/]+)/"', r1.text):
                 if hit == "..":
                     continue
                 packages[hit] = []
+                r2 = requests.get(base + "Archive/" + hit)
+                r2.raise_for_status()
+                found = False
                 for tar_hit in re.findall(
-                    r'([^>]+)</a></td><td align="right">(\d{4}-\d{2}-\d{2})',
-                    requests.get(base + "Archive/" + hit).text,
+                    r'([^>]+)</a></td><td align="right">(\d{4}-\d{2}-\d{2})', r2.text,
                 ):
                     name, ver = tar_hit[0].replace(".tar.gz", "").split("_", 1)
                     if name != hit:
                         raise ValueError(name, hit)
                     packages[hit].append((ver, tar_hit[1]))
+                    found = True
+                if not found:
+                    raise ValueError()
             with gzip.GzipFile(outfilename, "wb") as op:
                 op.write(json.dumps(packages, indent=2).encode("utf-8"))
 
@@ -438,9 +445,14 @@ class BioconductorRelease:
             out[name, ver] = f"data/annotation/src/contrib/{name}_{ver}.tar.gz"
 
         if self.patch_packages:
-            for kind, entries in self.patch_packages.items():
-                for entry in entries:
-                    out[entry["name"], entry["version"]] = entry
+            for entry in self.patch_packages.get("experiment", []):
+                out[
+                    entry["name"], entry["version"]
+                ] = f"data/experiment/src/contrib/{entry['name']}_{entry['version']}.tar.gz"
+            for entry in self.patch_packages.get("software", []):
+                raise ValueError("todo")
+            for entry in self.patch_packages.get("annotation", []):
+                raise ValueError("todo")
 
         archive = self.load_archive()
         for name, entries in archive.items():
@@ -491,6 +503,10 @@ class BioconductorRelease:
                     "suggests": info["suggests"],
                     "needs_compilation": info["needs_compilation"],
                 }
+        if kind == "software":
+            result.update(
+                bioconductor_overrides.missing_in_packages_gz.get(self.str_version, {})
+            )
         if kind == "software":
             for package, version_dates in self.load_archive().items():
                 if package not in result:

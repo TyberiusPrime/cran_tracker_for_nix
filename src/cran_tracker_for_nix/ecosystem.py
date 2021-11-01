@@ -552,6 +552,12 @@ class REcoSystemDumper:
             duplicates = {k for k, v in duplicate_detection.items() if v > 1}
             if duplicates:
                 pprint.pprint(duplicates)
+                for d in duplicates:
+                    print(d)
+                    for ii, p in enumerate(parts):
+                        if d in p:
+                            print(ii)
+                    print("")
                 raise ValueError("Duplicate packages", duplicates)
             graph = networkx.DiGraph()
             for name, info in all_packages.items():
@@ -726,6 +732,16 @@ class REcoSystemDumper:
             for fn in Path(source_path).glob("**/*")
             if fn.name != "README.md" and not fn.is_dir()
         ]
+
+        patch_files_to_keep = set()
+        for patches in self.flake_info.get("patches", []):
+            for p in patches:
+                p = p[1].replace('./../patches/', '')
+                patch_files_to_keep.append(p)
+        input_files = [fn for fn in input_files
+                if fn.parent.name != 'patches' or 
+                fn.name in patch_files]
+
         output_files = [output_path / fn.relative_to(source_path) for fn in input_files]
         input_files = [fn.relative_to(Path(".").absolute()) for fn in input_files]
 
