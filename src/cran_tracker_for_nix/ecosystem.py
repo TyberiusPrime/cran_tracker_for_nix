@@ -733,15 +733,6 @@ class REcoSystemDumper:
             if fn.name != "README.md" and not fn.is_dir()
         ]
 
-        patch_files_to_keep = set()
-        for patches in self.flake_info.get("patches", []):
-            for p in patches:
-                p = p[1].replace('./../patches/', '')
-                patch_files_to_keep.append(p)
-        input_files = [fn for fn in input_files
-                if fn.parent.name != 'patches' or 
-                fn.name in patch_files]
-
         output_files = [output_path / fn.relative_to(source_path) for fn in input_files]
         input_files = [fn.relative_to(Path(".").absolute()) for fn in input_files]
 
@@ -803,6 +794,8 @@ class REcoSystemDumper:
             [output_path / "flake.nix"] + output_files, generate
         )
         for fn in input_files:
+            if fn.name == 'r_patches':
+                raise ValueError()
             res.depends_on_file(fn)
         res.depends_on(self._load_header())
         res.depends_on(ppg2.ParameterInvariant(self.name + "r inputs", self.flake_info))
