@@ -567,6 +567,7 @@ class REcoSystemDumper:
             excluded_packages_notes = {}
             to_remove = set()
             # print("blacklist", bl)
+            an_error = False
             for m in bl:
                 if "--" in m:  # that's the source-- excluded_packages.
                     continue
@@ -580,9 +581,13 @@ class REcoSystemDumper:
 
                         to_remove.add(downstream)
                 else:
-                    raise ValueError(
+                    print(
                         f"but {m} was not in graph (superflous excluded_packages entry)"
                     )
+                    an_error = True
+            if an_error:
+                raise ValueError()
+
             for name in sorted(to_remove):
                 graph.remove_node(name)
             were_excluded = to_remove
@@ -630,7 +635,7 @@ class REcoSystemDumper:
                 message = []
                 for m in missing:
                     message.append(
-                        (m, list(graph.successors(m)), list(graph.predecessors(m)))
+                        ('missing', m, 'downstream', list(graph.successors(m)), 'upstream', list(graph.predecessors(m)))
                     )
                 raise ValueError(
                     "missing dependencies in graph (ie. somebody depends on them, but they ain't here)",
@@ -794,7 +799,7 @@ class REcoSystemDumper:
             [output_path / "flake.nix"] + output_files, generate
         )
         for fn in input_files:
-            if fn.name == 'r_patches':
+            if fn.name == "r_patches":
                 raise ValueError()
             res.depends_on_file(fn)
         res.depends_on(self._load_header())
