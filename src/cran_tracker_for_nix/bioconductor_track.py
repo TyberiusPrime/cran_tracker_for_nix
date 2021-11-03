@@ -163,6 +163,10 @@ class BioconductorRelease:
         self.excluded_packages = bioconductor_overrides.excluded_packages.get(
             self.str_version, None
         )  # we need these for all_packages early on.
+        self.broken_packages = bioconductor_overrides.broken_packages.get(
+            self.str_version, None
+        )  # we need these for all_packages early on.
+
         self.patch_packages = bioconductor_overrides.package_patches.get(
             self.str_version, {}
         )

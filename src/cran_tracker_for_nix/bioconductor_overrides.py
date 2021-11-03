@@ -378,6 +378,7 @@ missing_in_packages_gz = {
 # 'bioc_software--'. = bioconductor software
 # 'cran--'.
 # which is necessary when a package is in multiple but we don't want to kick all of them.
+# not to be confused with broken packgaes, which simply don't build..p.
 
 excluded_packages = []
 inherit(
@@ -391,6 +392,89 @@ inherit(
         "cran--GOsummaries": "newer in bioconductor",
         "cran--gdsfmt": "newer in bioconductor",
         "cran--oposSOM": "newer in bioconductor",
+    },
+)
+inherit(
+    excluded_packages,
+    "3.1",
+    {
+        "cran--saps": "newer in bioconductor",
+        "cran--muscle": "newer in bioconductor",
+    },
+)
+inherit(excluded_packages, "3.2", {})
+inherit(
+    excluded_packages,
+    "3.3",
+    {
+        "bioc_experiment--IHW": "newer in bioconductor-software",
+    },
+)
+inherit(
+    excluded_packages,
+    "3.4",
+    {
+        "cran--PharmacoGx": "newer in bioconductor",
+        "cran--statTarget": "newer in bioconductor",
+        "cran--synergyfinder": "newer in bioconductor",
+    },
+)
+inherit(excluded_packages, "3.5", {})
+inherit(
+    excluded_packages,
+    "3.6",
+    {
+        "bioc_software--JASPAR2018": "same package present in annotation",
+    },
+)
+inherit(
+    excluded_packages,
+    "3.7",
+    {
+        "bioc_software--JASPAR2018": "newer package present in annotation",
+        "bioc_software--MetaGxOvarian": "newer package present in experiment",
+        "iontree": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
+        "domainsignatures": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
+    },
+)
+inherit(
+    excluded_packages,
+    "3.8",
+    {
+        "cran--mixOmics": "newer in bioconductor",
+    },
+)
+inherit(excluded_packages, "3.9", {})
+inherit(excluded_packages, "3.10", {})
+inherit(excluded_packages, "3.11", {})
+inherit(excluded_packages, "3.12", {})
+inherit(
+    excluded_packages,
+    "3.13",
+    {
+        "metagenomeFeatures": "deprecated, but still in PACKAGES.gz",
+        "cran--interacCircos": "newer in bioconductor",
+        "cran--RCSL": "newer in bioconductor",
+    },
+)
+inherit(
+    excluded_packages,
+    "3.14",
+    {
+        "synapter": "no source package / build error according to bioconductor",
+        "metagenomeFeatures": "deprecated, not in 3.14, but still in the dependencies of other packages",
+        "destiny": "no source package / build error according to bioconductor",
+        "cran--interacCircos": "newer in bioconductor",
+        "cran--RCSL": "newer in bioconductor",
+    },
+)
+excluded_packages = inherit_to_dict(excluded_packages)
+
+broken_packages = []
+inherit(
+    broken_packages,
+    "3.0",
+    {
         # actual excludes
         "bigGP": "build is broken",
         "bioassayR": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
@@ -445,7 +529,7 @@ inherit(
     },
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.0", "2014-10-26"),
     {
         "metaMix": "R install fails with MPI problem",
@@ -455,7 +539,7 @@ inherit(
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.0", "2014-10-28"),
     {
         "h2o": "tries to download from s3",
@@ -463,14 +547,14 @@ inherit(
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.0", "2014-11-07"),
     {},
     ["HSMMSingleCell"],
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.0", "2015-01-11"),
     {
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
@@ -486,11 +570,9 @@ inherit(
 
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.1"),
     {
-        "cran--saps": "newer in bioconductor",
-        "cran--muscle": "newer in bioconductor",
         #  simply missing
         # "affy": "requires BiocInstaller",
         "bigGP": "build is broken with mpi trouble",
@@ -554,14 +636,14 @@ inherit(
     },
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.1", "2015-04-27"),
     {},
 )
 
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.1", "2015-05-02"),
     {
         "h5": "no hdf5.dev in this nixpkgs",
@@ -569,17 +651,17 @@ inherit(
     ["PPA"],
 )
 
-inherit(excluded_packages, ("3.1", "2015-05-16"), {}, ["bamboo"])
-inherit(excluded_packages, ("3.1", "2015-06-09"), {}, ["seqplots"])
+inherit(broken_packages, ("3.1", "2015-05-16"), {}, ["bamboo"])
+inherit(broken_packages, ("3.1", "2015-06-09"), {}, ["seqplots"])
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.1", "2015-07-02"),
     {
         "iptools": "can't find boost::regex",
     },
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.1", "2015-07-07"),
     {},
     [
@@ -589,14 +671,14 @@ inherit(
     ],
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.1", "2015-07-15"),
     {},
     ["assertive.base"],
 )
-inherit(excluded_packages, ("3.1", "2015-08-01"), {}, ["DT"])
+inherit(broken_packages, ("3.1", "2015-08-01"), {}, ["DT"])
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.1", "2015-10-01"),
     {
         "FIACH": "unknown output-sync type 'RTIFY_SOURCE=2'?",
@@ -607,7 +689,7 @@ inherit(
 )
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.2"),
     {
         # I expect these to stay broken
@@ -665,9 +747,9 @@ inherit(  # start anew.
         #'WideLM': 'ncvv too old (missing option)',
     },
 )
-inherit(excluded_packages, ("3.2", "2015-12-29"), {}, ["flowCore"])
+inherit(broken_packages, ("3.2", "2015-12-29"), {}, ["flowCore"])
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.2", "2016-01-10"),
     {
         "rjags": "Wrong JAGS version in nixpkgs 15.09",
@@ -675,15 +757,14 @@ inherit(
     },
     ["ggrepel"],
 )
-inherit(excluded_packages, ("3.2", "2016-02-08"), {}, ["spliceSites"])
+inherit(broken_packages, ("3.2", "2016-02-08"), {}, ["spliceSites"])
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.3"),
     {
         "XMLRPC": "(omegahat / github only?)",
         "SVGAnnotation": "github only?",
-        "bioc_experiment--IHW": "newer in bioconductor-software",
         "nloptr": "nlopt library is broken in nixpkgs 16.03",
         "ChemmineOB": "openbabel is broken in nixpkgs 16.03",
         "RcppOctave": "octave-package segfaults during build",
@@ -691,24 +772,20 @@ inherit(  # start anew.
 )
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.4"),
     {
         "XMLRPC": "(omegahat / github only?)",
         "SVGAnnotation": "github only?",
-        "cran--PharmacoGx": "newer in bioconductor",
-        "cran--statTarget": "newer in bioconductor",
-        "cran--synergyfinder": "newer in bioconductor",
         #
         "nloptr": "nlopt library is broken in nixpkgs 17.04",
         "ChemmineOB": "openbabel is broken in nixpkgs 17.04",
     },
 )
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.5"),  # 2017-04-25
     {
-        # --
         "AnnotationHub": "missing BiocInstaller - todo: patch?",
         "BiocCheck": "requires BiocInstaller",  # todo: patch?
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
@@ -778,27 +855,27 @@ inherit(  # start anew.
     },
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.5", "2017-04-25"),
     {
         # "INLA": "never on cran",
     },
 )
-inherit(excluded_packages, ("3.5", "2017-04-26"), {}, ["plink"])
-inherit(excluded_packages, ("3.5", "2017-06-09"), {}, ["dbplyr"])  # or is it -10?
+inherit(broken_packages, ("3.5", "2017-04-26"), {}, ["plink"])
+inherit(broken_packages, ("3.5", "2017-06-09"), {}, ["dbplyr"])  # or is it -10?
 inherit(
-    excluded_packages, ("3.5", "2017-06-19"), {}, ["GenomicFeatures"]
+    broken_packages, ("3.5", "2017-06-19"), {}, ["GenomicFeatures"]
 )  # or is it -10?
 inherit(
-    excluded_packages, ("3.5", "2017-06-30"), {}, ["mcPAFit"]
+    broken_packages, ("3.5", "2017-06-30"), {}, ["mcPAFit"]
 )  # new release, maybe...
 inherit(
-    excluded_packages, ("3.5", "2017-07-30"), {}, ["CountClust"]
+    broken_packages, ("3.5", "2017-07-30"), {}, ["CountClust"]
 )  # new cowplot release
 
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.6"),
     {
         "AnnotationHub": "missing BiocInstaller - todo: patch?",
@@ -806,7 +883,6 @@ inherit(  # start anew.
         "bigmemoryExtras": "needs bigmemory = 4.5.31, released 2017-11-21",
         "BiocCheck": "missing BiocInstaller - todo: patch?",
         "BiocSklearn": "needs python & sklearn",  # todo
-        "bioc_software--JASPAR2018": "same package present in annotation",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
         "ccmap": "missing BiocInstaller - todo: patch?",
         "chinese.misc": "Wants write access to nix store. Possibly patchable",
@@ -871,21 +947,17 @@ inherit(  # start anew.
         "yearn": "needs BiocInstaller",  # todo patch
     },
 )
+inherit(broken_packages, ("3.6", "2017-11-21"), {}, ["bigmemoryExtras"])  # start anew.
+inherit(broken_packages, ("3.6", "2017-11-24"), {}, ["genomation"])  # start anew.
 inherit(  # start anew.
-    excluded_packages, ("3.6", "2017-11-21"), {}, ["bigmemoryExtras"]
-)
-inherit(excluded_packages, ("3.6", "2017-11-24"), {}, ["genomation"])  # start anew.
-inherit(  # start anew.
-    excluded_packages, ("3.6", "2017-12-18"), {}, ["MutationalPatterns"]
+    broken_packages, ("3.6", "2017-12-18"), {}, ["MutationalPatterns"]
 )
 
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.7"),  # 2018-05-1
     {
-        "bioc_software--JASPAR2018": "newer package present in annotation",
-        "bioc_software--MetaGxOvarian": "newer package present in experiment",
         #
         "AnnotationHub": "missing BiocInstaller - todo: patch?",
         "Cyclops": "error: 'complex' in namespace 'std' does not name a template type",
@@ -906,7 +978,6 @@ inherit(  # start anew.
         "cudaBayesreg": "build is broken, needs nvcc",
         "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "devEMF": "undefined symbol: XftCharExists",
-        "domainsignatures": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
         "dSimer": "no matching function for call to 'std::tr1::unordered_map<std::__cxx11::basic_string<char, float>::ins",  # and no update within this release
         "flipflop": "cpp template error",
         "fulltext": "wants to write into home",
@@ -920,7 +991,6 @@ inherit(  # start anew.
         "h5": "no hdf5.dev in this nixpkgs",
         "HierO": "can't find BWidget",
         "interactiveDisplay": "tries to access bioconductor.org",
-        "iontree": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
         "kmcudaR": "build is broken, needs nvcc",
         "multiMiR": "Could not resolve host: multimir.ucdenver.edu",
         # "oligoClasses": "requires biocInstaller during installation",
@@ -960,45 +1030,45 @@ inherit(  # start anew.
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.7", "2018-05-10"),
     {},
     ["rsunlight"],
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.7", "2018-05-26"),
     {"GenABEL.data": "removed from cran, but still in packages"},
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.7", "2018-07-03"),
     {},
     ["ggtree"],
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.7", "2018-07-10"),
     {},
     ["pathifier"],
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.7", "2018-07-15"),
     {},
     ["ClusterSignificance"],
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.7", "2018-07-16"),
     {"ReporteRsjars": "removed from cran, but still in packages"},
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     "3.8",  # start anew. # 2018-10-31
     {
         "anyLib": "needs BiocInstaller",
@@ -1006,7 +1076,6 @@ inherit(
         "BiocSklearn": "needs python&sklearn",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
         "clpAPI": "missing clp library",
-        "cran--mixOmics": "newer in bioconductor",
         "cudaBayesreg": "build is broken, needs nvcc",
         "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "devEMF": "undefined symbol: XftCharExists",
@@ -1069,11 +1138,11 @@ inherit(
         "yearn": "needs BiocInstaller",  # todo patch
     },
 )
-inherit(excluded_packages, ("3.8", "2018-11-16"), {}, ["GENEAsphere"])
-inherit(excluded_packages, ("3.8", "2018-12-22"), {}, ["GEOquery"])
+inherit(broken_packages, ("3.8", "2018-11-16"), {}, ["GENEAsphere"])
+inherit(broken_packages, ("3.8", "2018-12-22"), {}, ["GEOquery"])
 
 inherit(  # start anew. - 2019-03-05
-    excluded_packages,
+    broken_packages,
     ("3.9"),
     {
         "ajv": "  ** testing if installed package keeps a record of temporary installation path-> cannot opon the connection?",
@@ -1145,22 +1214,22 @@ inherit(  # start anew. - 2019-03-05
         "x12": "'error: argument is of length zero'?",
     },
 )
-inherit(excluded_packages, ("3.9", "2019-05-18"), {}, ["charm"])
+inherit(broken_packages, ("3.9", "2019-05-18"), {}, ["charm"])
 
 
-inherit(excluded_packages, ("3.9", "2019-06-03"), {}, ["mnlogit"])
+inherit(broken_packages, ("3.9", "2019-06-03"), {}, ["mnlogit"])
 
-inherit(excluded_packages, ("3.9", "2019-06-17"), {}, ["ImmuneSpaceR"])
-
-
-inherit(excluded_packages, ("3.9", "2019-08-22"), {}, ["cola"])
-inherit(excluded_packages, ("3.9", "2019-09-12"), {}, ["PrInCE"])
+inherit(broken_packages, ("3.9", "2019-06-17"), {}, ["ImmuneSpaceR"])
 
 
-inherit(excluded_packages, ("3.9", "2019-10-22"), {}, ["gtrellis"])
+inherit(broken_packages, ("3.9", "2019-08-22"), {}, ["cola"])
+inherit(broken_packages, ("3.9", "2019-09-12"), {}, ["PrInCE"])
+
+
+inherit(broken_packages, ("3.9", "2019-10-22"), {}, ["gtrellis"])
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.10"),  # 2019-10-30
     {
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
@@ -1232,23 +1301,21 @@ inherit(  # start anew.
         "mlm4omics": "won't compile with current stan",
     },
 )
+inherit(broken_packages, ("3.10", "2019-11-08"), {}, ["trio"])  # see above for logiRec
+inherit(broken_packages, ("3.10", "2019-11-21"), {}, ["reactable"])
 inherit(
-    excluded_packages, ("3.10", "2019-11-08"), {}, ["trio"]
-)  # see above for logiRec
-inherit(excluded_packages, ("3.10", "2019-11-21"), {}, ["reactable"])
-inherit(
-    excluded_packages, ("3.10", "2019-12-30"), {}, ["uavRst"]
+    broken_packages, ("3.10", "2019-12-30"), {}, ["uavRst"]
 )  # update, might start to work
 inherit(
-    excluded_packages, ("3.10", "2020-01-28"), {}, ["plyranges", "BiocPkgTools"]
+    broken_packages, ("3.10", "2020-01-28"), {}, ["plyranges", "BiocPkgTools"]
 )  # see above for tidyselect
 inherit(
-    excluded_packages, ("3.10", "2020-02-07"), {}, ["splatter"]
+    broken_packages, ("3.10", "2020-02-07"), {}, ["splatter"]
 )  # see above for checkmate
 
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.10", "2020-03-03"),
     {
         "rphast": "removed from CRAN on 2020-03-03, but dependencies were not removed",
@@ -1258,7 +1325,7 @@ inherit(
 
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.11"),  # 2020-04-28
     {
         "baseflow": "needs rust",
@@ -1375,7 +1442,7 @@ inherit(  # start anew.
     },
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.11", "2020-04-29"),
     {},
     [
@@ -1425,14 +1492,14 @@ inherit(
 )
 
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.11", "2020-05-14"),
     {
         "parcor": "missing ppls",
     },  # check date
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.11", "2020-06-16"),
     {},
     ["rdomains"],  # check date
@@ -1440,7 +1507,7 @@ inherit(
 
 
 inherit(  # start anew. - 2020-10-28
-    excluded_packages,
+    broken_packages,
     ("3.12"),
     {
         "baseflow": "needs rust",
@@ -1532,23 +1599,22 @@ inherit(  # start anew. - 2020-10-28
     },
 )
 inherit(
-    excluded_packages,
+    broken_packages,
     ("3.12", "2021-01-16"),
     {},
     ["SeuratObject", "spatstat.geom", "synergyfinder"],
 )
-inherit(excluded_packages, ("3.12", "2021-01-17"), {}, ["spsUtil"])
-inherit(excluded_packages, ("3.12", "2021-01-23"), {}, ["spatstat.core"])
-inherit(excluded_packages, ("3.12", "2021-01-26"), {}, ["spsComps"])
-inherit(excluded_packages, ("3.12", "2021-02-11"), {}, ["biocthis"])
-inherit(excluded_packages, ("3.12", "2021-03-03"), {}, ["drawer"])
+inherit(broken_packages, ("3.12", "2021-01-17"), {}, ["spsUtil"])
+inherit(broken_packages, ("3.12", "2021-01-23"), {}, ["spatstat.core"])
+inherit(broken_packages, ("3.12", "2021-01-26"), {}, ["spsComps"])
+inherit(broken_packages, ("3.12", "2021-02-11"), {}, ["biocthis"])
+inherit(broken_packages, ("3.12", "2021-03-03"), {}, ["drawer"])
 
 
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.13"),  # 2021-05-20
     {
-        # --
         "affyPara": "error: cannot add binding of '.affyParaInternalEnv' to the base environment",
         "baseflow": "needs rust",
         "benchmarkfdrData2019": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
@@ -1559,11 +1625,8 @@ inherit(  # start anew.
         "cbpManager": "Error in loadNamespace(x) : there is no package called 'markdown'",
         "clustifyrdatahub": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
         "commonsMath": "cannot open URL 'https://search.maven.org/remotecontent?filepath=org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar'",
-        "cran--interacCircos": "newer in bioconductor",
-        "cran--RCSL": "newer in bioconductor",
         "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "depmap": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
-        "destiny": "no source package / build error according to bioconductor",
         "dmdScheme": "cannot open URL 'https://github.com/Exp-Micro-Ecol-Hub/dmdSchemeRepository/raw/master/schemes/dmdScheme_0.9.9.tar.gz'",
         "DuoClustering2018": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
         "emtdata": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
@@ -1597,7 +1660,6 @@ inherit(  # start anew.
         "kazaam": "mpi trouble",
         "kmcudaR": "build is broken, needs nvcc",
         "metaboliteIDmapping": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
-        "metagenomeFeatures": "deprecated, but still in PACKAGES.gz",
         "mlbstatsR": "Could not resolve host: site.api.espn.com",
         "msigdb": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
         "multiMiR": "talks to multimr.org",
@@ -1633,7 +1695,6 @@ inherit(  # start anew.
         "spiR": "Could not resolve host: warin.ca",
         "STexampleData": "error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
         "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
-        "synapter": "no source package / build error according to bioconductor",
         "TabulaMurisData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
         "TENxVisiumData": "error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
         "terra": "ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db",  # tod: probably fixable
@@ -1642,20 +1703,64 @@ inherit(  # start anew.
     },
 )
 
-inherit(excluded_packages, ("3.13", "2021-07-02"), {}, ["ggfun"])
-inherit(excluded_packages, ("3.13", "2021-07-23"), {}, ["AntMan"])
-inherit(excluded_packages, ("3.13", "2021-08-17"), {}, ["yulab.utils"])
+inherit(broken_packages, ("3.13", "2021-07-02"), {}, ["ggfun"])
+inherit(broken_packages, ("3.13", "2021-07-23"), {}, ["AntMan"])
+inherit(broken_packages, ("3.13", "2021-08-17"), {}, ["yulab.utils"])
 inherit(  # start anew.
-    excluded_packages,
+    broken_packages,
     ("3.14"),  # 2021-10-27
     {
-        "cran--interacCircos": "newer in bioconductor",
-        "cran--RCSL": "newer in bioconductor",
-        "metagenomeFeatures": "deprecated, not in 3.14, but still in the dependencies of other packages",
-        "destiny": "deprecated, but still in the dependencies of other packages",
-        "synapter": "bioconductor 3.14 lists it,b ut has no source?",
         "ROracle": "OCI libraries not found",
         "Rcplex": "'This nix expression requires that the cplex installer is already downloaded to your machine. Get it from IBM:'. Antihermetic",
+        "immunotation": "Could not resolve host: services.healthtech.dtu.dk",
+        "googleformr": "attempts to contact docs.google.com",
+        "arrow": 'compliation failure',#todo
+        "nearfar": "https://raw.githubusercontent.com/joerigdon/nearfar/master/angrist.csv': status was 'Couldn't resolve host name'",
+        "OmnipathR": "cannot open file '/homeless-shelter/.config/OmnipathR/omnipathr.yml': No such file or directory",
+        'paxtoolsr': 'wants to write to home',
+        "ChemmineOB": "won't find openbabel/obutil.h",  # todo,
+        "bitmexr": "please check your internet connection",
+        "fgga": 'path[1]="/homeless-shelter/.cache/R/BiocFileCache": No such file or directory',
+        "HMP16SData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "waddR": 'path[1]="/homeless-shelter/.cache/R/BiocFileCache": No such file or directory',
+        "rfaRm": "Could not resolve host: rfam.xfam.org",
+        "scpdata": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "signatureSearch": 'could not find function "refreshHub"',
+        "spiR": "Could not resolve host: warin.ca",
+        "fulltext": 'error: path[1]="/homeless-shelter/.cache/R/fulltext_storr": No such file or directory',
+        'valvse': 'missing include for math.h', # todo patch?
+        "HDCytoData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "DuoClustering2018": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "nfl4th": "error: Can't subset columns that don't exist.",
+        "depmap": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "MicrobiotaProcess": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "TabulaMurisData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "emtdata": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "SCATEData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "clustifyrdatahub": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "benchmarkfdrData2019": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "bodymapRat": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "iriR": "Could not resolve host: warin.ca",
+        "STexampleData": "error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "nullrangesData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "org.Mxanthus.db": "error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "FieldEffectCrc": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "spatialDmelxsim": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "synaptome.db": "error: error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "packagefinder": "cannot open the connection to 'https://CRAN.R-project.org/web/packages/packages.rds'",
+        "metaboliteIDmapping": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "TENxVisiumData": "error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "interactiveDisplay": "'trying to use CRAN without setting a mirror'",
+        "muscData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "multiMiR": "talks to multimr.org",
+        "SingleMoleculeFootprintingData": " error: error in evaluating the argument 'x' in selecting a method for function 'query': error in evaluating the argument 'conn' in selecting a method for function 'dbDisconnect': object 'info' not found",
+        "PANTHER.db": "Directory of lock file does not exist: '/homeless-shelter/.cache/R/AnnotationHub'",
+        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
+        "ReactomeContentService4R": "Could not resolve host: reactome.org",
+        "gpuMagic": "needs opencl",
+        "snapcount": "Could not resolve host: snaptron.cs.jhu.edu",
+        "cn.mops": "Error: object 'values' is not exported by 'namespace:IRanges",
+        "terra": "ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db",  # tod: probably fixable
         "x13binary": "'https://github.com/x13org/x13prebuilt/raw/master/v1.1.57/linux/64/x13ashtml': status was 'Couldn't resolve host name'",
         "RQuantLib": "hquantlib is a haskell package - don't think that's what's required?",
         "rgl": "testing if installed package can be loaded from temporary location -> death",  # todo important.
@@ -1685,8 +1790,9 @@ inherit(  # start anew.
         "Rmpi": "configure: error: Unknown type of mpi: use --with-Rmpi-type or RMPI_TYPE to specify it",  # todo : figure out and fix
     },
 )
+inherit(broken_packages, ("3.14", "2021-10-28"), {}, ["cn.mops"])
 
-excluded_packages = inherit_to_dict(excluded_packages)
+broken_packages = inherit_to_dict(broken_packages)
 
 
 # for when a new package can't be used because a dependency hasn't
@@ -1935,8 +2041,18 @@ additional_r_dependencies = {
         },
     },
     "3.14": {
+        "cran": {
+            "BINtools": ["rstantools"],
+            "bayesZIB": ["rstantools"],
+            "densEstBayes": ["rstantools"],
+            "qmix": ["rstantools"],
+        },
         "software": {
             "MicrobiotaProcess": ["phyloseq"],
+            "CAGEr": ["beanplot"],
+            "martini": ["memoise"],
+            'SpidermiR': ['visNetwork','networkD3'],
+            'sangeranalyseR': ['kableExtra'],
         },
     },
 }
@@ -2963,8 +3079,13 @@ inherit(
         "GPBayes": ["gsl_1"],
         "rawrr": ["mono"],
         "archive": ["pkgconfig", "libarchive"],
-        "bedrock": ["cmake"],
+        "vdiffr": ['libpng'],
+        "rbedrock": ["cmake", 'zlib'],
         "valse": ["gsl_1"],
+        "arrow": ["cmake", "arrow-cpp"],
+        "cartogramR": ["fftw"],
+        'MatchIt': ['binutils'],
+        "vapour": ["pkgconfig", "gdal", "proj", "geos", "sqlite"],
         "strawr": ["curl"],
         "httpuv": ["zlib"],
     },
@@ -2979,6 +3100,7 @@ inherit(
         "OpenMPController",
         "sROC",
         "OpenABMCovid19",
+        "collapse",
     ],
     copy_anyway=True,
 )
@@ -3873,7 +3995,10 @@ inherit(
     "3.14",
     {
         "cuml4r": shebangs,
+        "NxtIRFcore": shebangs,
+        "MatchIt": fix_strip,
     },
+    ["freetypeharfbuzz", "collapse"],
     copy_anyway=True,
 )
 
@@ -3905,6 +4030,7 @@ overrideDerivations = inherit_to_dict(overrideDerivations)
 extra_snapshots = {}
 for adict in (
     excluded_packages,
+    broken_packages,
     downgrades,
     comments,
     package_patches,

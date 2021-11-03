@@ -395,6 +395,8 @@ class REcoSystemDumper:
 
             print("no of packages set", len(r), "skip", skip)
             for ii, package_set in enumerate(r):  # start with the big ones.
+                package_set = [x for x in package_set if not x in self.marked_broken
+                         and not x in self.marked_broken_indirectly]
                 if skip is not None and ii < skip:
                     print("skip", ii, skip)
                     continue
@@ -645,6 +647,18 @@ class REcoSystemDumper:
                 graph, all_packages, were_excluded, self.archive_date
             )
 
+            self.marked_broken = set()
+            self.marked_broken_indirectly = set()
+            if self.bioc_release.broken_packages:
+                for broken_pkg, reason in self.bioc_release.broken_packages.items():
+                    all_packages[broken_pkg]['broken'] = True
+                    excluded_packages_notes[broken_pkg] = "broken: " + reason
+                    self.marked_broken.add(broken_pkg)
+                    for downstream in descendants(graph, broken_pkg):
+                        excluded_packages_notes[downstream] = f"indirectly broken by {broken_pkg}"
+                        self.marked_broken_indirectly.add(downstream)
+
+
             all_packages = {
                 k: all_packages[k] for k in sorted(graph.nodes)
             }  # enforce deterministic output order, and filter removed from all_packages
@@ -657,6 +671,7 @@ class REcoSystemDumper:
                 "all_packages": all_packages,
                 "excluded_packages_notes": excluded_packages_notes,
             }
+
             return data
 
         cache_path = Path("cache")
@@ -845,6 +860,8 @@ class REcoSystemDumper:
             out["requireX"] = True
         if "skip_check" in info:
             out["doCheck"] = False
+        if info.get('broken', False):
+            out['broken'] = True
         op.write(format_nix_value(out) + ";\n")
 
     def dump_cran_packages(self, output_path):
@@ -1064,7 +1081,7 @@ class REcoSystemDumper:
 }
 """.replace(
                 "%PACKAGES%",
-                " ".join((make_name_safe_for_nix(x) for x in packages)).replace(
+                "\n ".join((make_name_safe_for_nix(x) for x in packages)).replace(
                     ".", "_"
                 ),
             )
