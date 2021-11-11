@@ -221,7 +221,8 @@ class REcoSystem:
         res = set()
         for bioc_release in self.bcvs.values():
             dates = bioc_release.get_cran_dates(
-                self.ct, self.r_track,
+                self.ct,
+                self.r_track,
             )  # that's a set of (archive_date, snapshot_date)
             start = bioc_release.release_info.start_date
             end = bioc_release.release_info.end_date
@@ -249,6 +250,7 @@ class REcoSystemDumper:
         self.r_track = RTracker()
         self.name = f"recosystem_dumper_{format_date(archive_date)}_{self.bioc_release.str_version}"
         self.data_path = common.store_path
+        self.cargo_jobs = []
 
     def _load_header(self):
         if not hasattr(self, "load_header_job"):
@@ -306,9 +308,14 @@ class REcoSystemDumper:
 
         job_packages = self.load_packages()
 
+        job_cargos = self.add_cargos_to_flake(output_path, job_packages)
+
         def dump_excluded_packages(output_filename):
             output_filename.write_text(
-                json.dumps(self.package_info["excluded_packages_notes"], indent=2,)
+                json.dumps(
+                    self.package_info["excluded_packages_notes"],
+                    indent=2,
+                )
             )
 
         job_excluded_packages = (
@@ -323,7 +330,8 @@ class REcoSystemDumper:
             output_path / "generated" / "cran-packages.nix",
         ).depends_on(job_fill_flake, job_packages)
         job_bioc_software = self.dump_bioc_packages(
-            "bioc_software", output_path / "generated" / "bioc-packages.nix",
+            "bioc_software",
+            output_path / "generated" / "bioc-packages.nix",
         ).depends_on(job_fill_flake, job_packages)
         job_bioc_experiment = self.dump_bioc_packages(
             "bioc_experiment",
@@ -349,7 +357,12 @@ class REcoSystemDumper:
         )
 
         def dump_downgrades(output_file, downgrades=downgrades):
-            output_file.write_text(json.dumps(downgrades, indent=2,))
+            output_file.write_text(
+                json.dumps(
+                    downgrades,
+                    indent=2,
+                )
+            )
 
         job_downgrades = ppg2.FileGeneratingJob(
             output_path / "downgraded_packages.json", dump_downgrades, empty_ok=True
@@ -395,8 +408,12 @@ class REcoSystemDumper:
 
             print("no of packages set", len(r), "skip", skip)
             for ii, package_set in enumerate(r):  # start with the big ones.
-                package_set = [x for x in package_set if not x in self.marked_broken
-                         and not x in self.marked_broken_indirectly]
+                package_set = [
+                    x
+                    for x in package_set
+                    if not x in self.marked_broken
+                    and not x in self.marked_broken_indirectly
+                ]
                 if skip is not None and ii < skip:
                     print("skip", ii, skip)
                     continue
@@ -409,7 +426,9 @@ class REcoSystemDumper:
                 test_path.mkdir(exist_ok=True, parents=True)
 
                 def run_test(
-                    output_file, package_set=package_set, test_path=test_path,
+                    output_file,
+                    package_set=package_set,
+                    test_path=test_path,
                 ):
                     self.test_package_set_build(
                         Path(__file__).parent.parent.parent.parent
@@ -439,6 +458,7 @@ class REcoSystemDumper:
                             job_bioc_annotation,
                             job_bioc_experiment,
                         ]
+                        + self.cargo_jobs
                     )
                     .depends_on(self._load_header())
                     .depends_on(ppg2.FunctionInvariant(make_name_safe_for_nix))
@@ -475,7 +495,7 @@ class REcoSystemDumper:
         if not (output_path / " done").exists():
             # no need to gen if we are done
             ppg2.JobGeneratingJob("gen_test" + self.name, gen_tests).depends_on(
-                job_packages, job_fill_flake
+                job_packages, job_fill_flake, job_cargos
             )
 
     def load_packages(self):
@@ -637,7 +657,14 @@ class REcoSystemDumper:
                 message = []
                 for m in missing:
                     message.append(
-                        ('missing', m, 'downstream', list(graph.successors(m)), 'upstream', list(graph.predecessors(m)))
+                        (
+                            "missing",
+                            m,
+                            "downstream",
+                            list(graph.successors(m)),
+                            "upstream",
+                            list(graph.predecessors(m)),
+                        )
                     )
                 raise ValueError(
                     "missing dependencies in graph (ie. somebody depends on them, but they ain't here)",
@@ -651,13 +678,14 @@ class REcoSystemDumper:
             self.marked_broken_indirectly = set()
             if self.bioc_release.broken_packages:
                 for broken_pkg, reason in self.bioc_release.broken_packages.items():
-                    all_packages[broken_pkg]['broken'] = True
+                    all_packages[broken_pkg]["broken"] = True
                     excluded_packages_notes[broken_pkg] = "broken: " + reason
                     self.marked_broken.add(broken_pkg)
                     for downstream in descendants(graph, broken_pkg):
-                        excluded_packages_notes[downstream] = f"indirectly broken by {broken_pkg}"
+                        excluded_packages_notes[
+                            downstream
+                        ] = f"indirectly broken by {broken_pkg}"
                         self.marked_broken_indirectly.add(downstream)
-
 
             all_packages = {
                 k: all_packages[k] for k in sorted(graph.nodes)
@@ -769,7 +797,9 @@ class REcoSystemDumper:
             ]
             input_files.extend(override_input_files)
 
-        def generate(output_files,):
+        def generate(
+            output_files,
+        ):
             self.clear_output(output_path)
             if not source_path.exists():
                 raise ValueError("No flake source found")
@@ -821,6 +851,39 @@ class REcoSystemDumper:
         res.depends_on(ppg2.ParameterInvariant(self.name + "r inputs", self.flake_info))
         return res
 
+    def add_cargos_to_flake(self, output_path, job_packages):
+        def gen():
+            for name, info in self.package_info["all_packages"].items():
+                if name in bioconductor_overrides.needs_rust:
+                    ver = info["version"]
+
+                    def copy(output_filename, name=name, ver=ver):
+                        input_filename = (
+                            self.ct.store_path
+                            / "cargos"
+                            / f"{name}_{ver}"
+                            / "Cargo.lock"
+                        )
+                        if not input_filename.exists():
+                            input_filename = (
+                                common.store_path.parent
+                                / "cargos"
+                                / f"{name}_{ver}"
+                                / "Cargo.lock"
+                            )
+                        output_filename.parent.mkdir(exist_ok=True, parents=True)
+                        output_filename.write_text(input_filename.read_text())
+
+                    self.cargo_jobs.append(
+                        ppg2.FileGeneratingJob(
+                            output_path / "cargos" / name / "Cargo.lock", copy
+                        )
+                    )
+
+        return ppg2.JobGeneratingJob("add_cargos_to_flake", gen).depends_on(
+            job_packages
+        )
+
     def write_readme(self, output_path):
         def gen(output_filename):
             readme_text = (flake_source_path / "default" / "README.md").read_text()
@@ -860,8 +923,8 @@ class REcoSystemDumper:
             out["requireX"] = True
         if "skip_check" in info:
             out["doCheck"] = False
-        if info.get('broken', False):
-            out['broken'] = True
+        if info.get("broken", False):
+            out["broken"] = True
         op.write(format_nix_value(out) + ";\n")
 
     def dump_cran_packages(self, output_path):
@@ -885,7 +948,9 @@ class REcoSystemDumper:
                         )
                     )
                 )
-                op.write("\n{ self, derive, pkgs, breakpointHook, lib, stdenv }:\n")
+                op.write(
+                    "\n{ self, derive, pkgs, breakpointHook, lib, stdenv, importCargo }:\n"
+                )
                 # we use the most common snapshot to save some byte here
                 snapshot_counts = collections.Counter()
                 for name, info in cran_packages.items():
@@ -995,7 +1060,7 @@ class REcoSystemDumper:
             "--verbose",
             "--max-jobs",
             # "auto",
-            str(ppg2.util.CPUs()),
+            str(ppg2.util.CPUs() - 4),
             # "1",
             "--cores",
             "4",  # it's pretty bad at using the cores either way, so let's oversubscribe ab it...

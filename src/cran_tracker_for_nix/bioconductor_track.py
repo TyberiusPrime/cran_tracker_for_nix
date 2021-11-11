@@ -17,12 +17,15 @@ from pathlib import Path
 import requests
 import re
 import datetime
+import networkx
+import multiprocessing
 import gzip
 import json
 import bisect
 import yaml
 import io
 from typing import Tuple
+import time
 import random
 import functools
 from lazy import lazy
@@ -312,25 +315,23 @@ class BioconductorRelease:
                 if hit == "..":
                     continue
                 packages[hit] = []
-                r2 = requests.get(base + "Archive/" + hit)
-                r2.raise_for_status()
-                found = False
-                for tar_hit in re.findall(
-                    r'([^>]+)</a></td><td align="right">(\d{4}-\d{2}-\d{2})', r2.text,
-                ):
-                    name, ver = tar_hit[0].replace(".tar.gz", "").split("_", 1)
-                    if name != hit:
-                        raise ValueError(name, hit)
-                    packages[hit].append((ver, tar_hit[1]))
-                    found = True
-                if not found:
-                    raise ValueError()
+            pool = multiprocessing.Pool(6)
+            for hit, result in pool.map(
+                versions_from_archive, [(hit, base) for hit in packages]
+            ):
+                packages[hit] = result
             with gzip.GzipFile(outfilename, "wb") as op:
                 op.write(json.dumps(packages, indent=2).encode("utf-8"))
 
-        return ppg2.FileGeneratingJob(
-            self.store_path / "archive.json.gz", download
-        ).depends_on(self.date_invariant)
+        return (
+            ppg2.FileGeneratingJob(
+                self.store_path / "archive.json.gz",
+                download,
+                resources=ppg2.Resources.AllCores,
+            )
+            .depends_on(self.date_invariant)
+            .depends_on_func(versions_from_archive, "version_from_archive")
+        )
 
     def load_archive(self):
         """load the archive data - if applicable"""
@@ -412,7 +413,12 @@ class BioconductorRelease:
         all_dates = set()
         for package, version_dates in self.load_archive().items():
             for _version, a_date in version_dates:
-                all_dates.add(datetime.datetime.strptime(a_date, "%Y-%m-%d",).date())
+                all_dates.add(
+                    datetime.datetime.strptime(
+                        a_date,
+                        "%Y-%m-%d",
+                    ).date()
+                )
         if all(x > date for x in all_dates):  # release date, or shortly after?
             all_dates.add(date)
         candidates = sorted([x for x in all_dates if x <= date])
@@ -421,17 +427,18 @@ class BioconductorRelease:
     def find_closest_available_snapshot(self, date, available_snapshots):
         """Sometimes MRAN (or Rstudio) does not have a CRAN snapshot
         at the date bioconductor was updated.
-        We'll use the next available date instead.
+        We'll use the previous available date instead.
+        (Not the next, that's unstable if it's today that wasn't snapshoted")
         """
         d = date.strftime("%Y-%m-%d")
         ok = sorted(
-            [x for x in available_snapshots if x >= d]
+            [x for x in available_snapshots if x <= d]
         )  # lexographic sorting for the win
         if not ok:
             raise ValueError(
-                "none >=", d, "latest available", sorted(available_snapshots)[-1]
+                "none <=", d, "latest available", sorted(available_snapshots)[-1]
             )
-        return datetime.datetime.strptime(ok[0], "%Y-%m-%d").date()
+        return datetime.datetime.strptime(ok[-1], "%Y-%m-%d").date()
 
     def assemble_all_packages(self):
         out = {}
@@ -649,7 +656,9 @@ class BioconductorRelease:
         # this is here because it's bioc version dependent
         # but it also handles cran packages
         def repl_dep(n):
-            if "." not in n and (n != "breakpointHook"):
+            if is_nix_literal(n):
+                return n
+            elif "." not in n and (n != "breakpointHook"):
                 return nix_literal(f"pkgs.{n}")
             else:
                 return nix_literal(n)
@@ -691,19 +700,57 @@ class BioconductorRelease:
                 errors.append(f"{pkg_name} in skip_check, but not in all_packages")
 
         for what in ["patches", "attrs", "overrideDerivations"]:
-            for pkg_name, values in match_override_keys(
+            mok = match_override_keys(
                 getattr(bioconductor_overrides, what),
                 self.str_version,
                 date,
                 none_ok=True,
                 release_info=self.release_info,
-            ).items():
-                if pkg_name not in all_packages and pkg_name not in excluded:
-                    errors.append(
-                        f"package with {what} but not in graph or excluded: {pkg_name}"
-                    )
-                if pkg_name in all_packages:
-                    all_packages[pkg_name][what] = values
+            )
+            # first we apply the 'inherit from upstream values
+            for pkg_name, values in mok.items():
+                if pkg_name.endswith("->") or pkg_name.endswith("->>"):
+                    upstream_pkg_name = pkg_name[: pkg_name.rfind("-")]
+                    recursive = pkg_name.endswith("->>")
+                    if (
+                        upstream_pkg_name not in all_packages
+                        and upstream_pkg_name not in excluded
+                    ):
+                        errors.append(
+                            f"package-> with {what} but not in graph or excluded: {pkg_name}"
+                        )
+                    for (
+                        downstream_pkg_name
+                    ) in networkx.algorithms.traversal.depth_first_search.dfs_preorder_nodes(
+                        graph,
+                        source=upstream_pkg_name,
+                        depth_limit=1 if not recursive else None,
+                    ):
+                        v = all_packages[downstream_pkg_name]
+                        if what in v:
+                            if isinstance(values, dict):
+                                v[what].update(values)
+                            else:
+                                v[what] += values
+                        else:
+                            v[what] = values
+
+            # then the per package ones
+            for pkg_name, values in mok.items():
+                if not (pkg_name.endswith("->") or pkg_name.endswith("->>")):
+                    if pkg_name not in all_packages and pkg_name not in excluded:
+                        errors.append(
+                            f"package with {what} but not in graph or excluded: {pkg_name}"
+                        )
+                    if pkg_name in all_packages:
+                        v = all_packages[pkg_name]
+                        if what in v:
+                            if isinstance(values, dict):
+                                v[what].update(values)
+                            else:
+                                v[what] += values
+                        else:
+                            v[what] = values
 
         for pkg_name, info in all_packages.items():
             key = pkg_name, info["version"]
@@ -715,7 +762,9 @@ class BioconductorRelease:
         if errors:
             # print(sorted(all_packages.keys()))
             # print(excluded)
-            raise ValueError("\n".join(errors),)
+            raise ValueError(
+                "\n".join(errors),
+            )
 
         # extra special magic for samtools injecting zlib
         for node in graph.successors("Rsamtools"):
@@ -742,3 +791,26 @@ class BioconductorRelease:
                 # for node in descendants(graph, pkg_name):
                 # all_packages[node]["needs_x"] = True
                 # print("setting needs_x", node, pkg_name)
+
+
+archive_hit_regexps = re.compile(
+    r'([^>]+)</a></td><td align="right">(\d{4}-\d{2}-\d{2})'
+)
+
+
+def versions_from_archive(args):
+    hit, base = args
+    r2 = requests.get(base + "Archive/" + hit)
+    r2.raise_for_status()
+    found = False
+    result = []
+    for tar_hit in archive_hit_regexps.findall(r2.text):
+        name, ver = tar_hit[0].replace(".tar.gz", "").split("_", 1)
+        if name != hit:
+            raise ValueError(name, hit)
+        result.append((ver, tar_hit[1]))
+        found = True
+    if not found:
+        raise ValueError()
+    time.sleep(0.1) # don't hammer the server, ok?
+    return hit, result

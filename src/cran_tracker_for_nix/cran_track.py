@@ -1,4 +1,7 @@
 import datetime
+import gzip
+import io
+import tarfile
 import pypipegraph2 as ppg2
 import re
 import requests
@@ -16,7 +19,7 @@ from .common import (
     dict_minus_keys,
     extract_snapshot_from_url,
 )
-from .bioconductor_overrides import match_override_keys
+from .bioconductor_overrides import match_override_keys, needs_rust
 from . import bioconductor_overrides
 
 
@@ -374,7 +377,10 @@ class CranTrack:
 
         def gen_download_and_hash():
             (self.store_path / "sha256").mkdir(exist_ok=True)
-            for ((name, version), info,) in self.assemble_all_packages().items():
+            for (
+                (name, version),
+                info,
+            ) in self.assemble_all_packages().items():
 
                 def do(
                     output_filenames,
@@ -393,7 +399,8 @@ class CranTrack:
                     if (name, version) in self.manual_url_overrides:
                         url = self.manual_url_overrides[name, version]
                         hash_url(
-                            url=url, path=output_filenames["sha256"],
+                            url=url,
+                            path=output_filenames["sha256"],
                         )
                         output_filenames["url"].write_text(url)
                     else:
@@ -407,7 +414,8 @@ class CranTrack:
                             try:
                                 url = f"{base_url}{offset_snapshot}/src/contrib/{name}_{version}.tar.gz"
                                 hash_url(
-                                    url, path=output_filenames["sha256"],
+                                    url,
+                                    path=output_filenames["sha256"],
                                 )
                                 output_filenames["url"].write_text(url)
                                 break
@@ -422,7 +430,7 @@ class CranTrack:
                                         + f"{base_url}{snapshot}/src/contrib/{name}_{version}.tar.gz"
                                     )
 
-                ppg2.MultiFileGeneratingJob(
+                j = ppg2.MultiFileGeneratingJob(
                     {
                         "sha256": self.store_path
                         / "sha256"
@@ -434,6 +442,37 @@ class CranTrack:
                     do,
                     depend_on_function=False,
                 )
+                if name in needs_rust and needs_rust[name] is not True:
+                    url_filename = j["url"]
+                    name_in_tar = needs_rust[name]
+                    if not name_in_tar.endswith('Cargo.lock'):
+                        if not name_in_tar.endswith('/'):
+                            name_in_tar += '/Cargo.lock'
+                        else:
+                            name_in_tar += 'Cargo.lock'
+                    def extract_rust(
+                        output_filename,
+                        url_filename=url_filename,
+                        name_in_tar=name_in_tar,
+                    ):
+                        url = url_filename.read_text()
+                        r = requests.get(url)
+                        r.raise_for_status()
+                        buffer = io.BytesIO(r.content)
+                        gz = gzip.GzipFile(mode='rb', fileobj=buffer)
+                        tar = tarfile.open(fileobj=gz, mode="r")
+                        tar.list()
+                        output_filename.parent.mkdir(exist_ok=True,parents=True)
+                        fh = tar.extractfile(name_in_tar)
+                        output_filename.write_bytes(fh.read())
+
+                    ppg2.FileGeneratingJob(
+                        self.store_path
+                        / "cargos"
+                        / (name + "_" + version)
+                        / "Cargo.lock",
+                        extract_rust,
+                    ).depends_on(j)
 
         ppg2.JobGeneratingJob(
             "gen_download_and_hash", gen_download_and_hash
@@ -452,7 +491,11 @@ class CranTrack:
             bioc_str_version, {}
         ).get("cran", {})
 
-        for (name, version, info,) in package_info:
+        for (
+            name,
+            version,
+            info,
+        ) in package_info:
             pkg_date = parse_date(info["start_date"])
             if pkg_date <= snapshot_date:
                 pkg_end_date = info["end_date"]

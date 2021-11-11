@@ -6,14 +6,26 @@
       "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c";
     nixpkgs.flake = false;
     flake-utils.url = "github:numtide/flake-utils";
-    nixpkgs_master.url = # breakpointhook is not available before 19.03 
+    flake-utils.inputs.nixpkgs.follows = "nixpkgs";
+    nixpkgs_master.url = # breakpointhook is not available before 19.03
       "github:nixOS/nixpkgs?rev=e55bd22bbca511c4613a33d809870792d7968d1c";
+    libSMBL = {
+      url =
+        "github:TyberiusPrime/libSMBL_flake?rev=f14d1a7cdfdbc486350a3694fb5cdb92afaf0236";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
+    import-cargo.url = "github:edolstra/import-cargo";
+    import-cargo.inputs.nixpkgs.follows = "nixpkgs";
+
   };
 
-  outputs = { self, nixpkgs, flake-utils, nixpkgs_master }:
+  outputs = { self, nixpkgs, flake-utils, nixpkgs_master, libSMBL, import-cargo }:
 
     flake-utils.lib.eachDefaultSystem (system:
       let
+        inherit (import-cargo.builders) importCargo;
+        libSMBL_ = libSMBL;
         pkgs = import nixpkgs {
           inherit system;
           config = {
@@ -26,14 +38,15 @@
                 name = pname + "-" + version;
 
                 src = pkgs.fetchurl {
-                  url = "http://cran.r-project.org/src/base/R-${major_version}/${name}.tar.gz";
+                  url =
+                    "http://cran.r-project.org/src/base/R-${major_version}/${name}.tar.gz";
                   sha256 =
                     "04kk6wd55bi0f0qsp98ckjxh95q2990vkgq4j83kiajvjciq7s87";
                 };
-                patches = []; # R_patches-generated
+                patches = [ ]; # R_patches-generated
                 #additionalOverrides
               });
-
+              libSMBL = libSMBL_.defaultPackage.${system};
             };
           };
         };
@@ -48,6 +61,7 @@
           inherit pkgs;
           inherit overrides;
           inherit breakpointHook;
+          inherit importCargo;
         };
         lib = pkgs.lib;
         rWrapper = pkgs.callPackage ./wrapper.nix {
