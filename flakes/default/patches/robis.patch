@@ -1,0 +1,24 @@
+diff --git a/R/dna.R b/R/dna.R
+index 2060216..6f4c6a0 100644
+--- a/R/dna.R
++++ b/R/dna.R
+@@ -1,6 +1,6 @@
+ utils::globalVariables("where")
+ 
+-dna_cols <- get_dwc_fields("https://rs.gbif.org/extension/gbif/1.0/dna_derived_data_2021-07-05.xml")
++dna_cols <- tryCatch({get_dwc_fields("https://rs.gbif.org/extension/gbif/1.0/dna_derived_data_2021-07-05.xml")}, error=function(e) {F})
+ 
+ fast_unnest_dna <- function(dt, cols) {
+   dna <- NULL
+diff --git a/R/mof.R b/R/mof.R
+index 49022e2..d681241 100644
+--- a/R/mof.R
++++ b/R/mof.R
+@@ -1,6 +1,6 @@
+ utils::globalVariables("where")
+ 
+-mof_cols <- get_dwc_fields("https://rs.gbif.org/extension/obis/extended_measurement_or_fact.xml")
++mof_cols <- tryCatch({get_dwc_fields("https://rs.gbif.org/extension/obis/extended_measurement_or_fact.xml")}, error=function(e) {F})
+ 
+ fast_unnest_mof <- function(dt, cols) {
+   mof <- NULL

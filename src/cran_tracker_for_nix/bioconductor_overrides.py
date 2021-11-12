@@ -182,6 +182,9 @@ def inherit(collector, new_key, new, remove=None, copy_anyway=False, rewriter=No
     # remove first, fill in then.
     if remove:
         remove = set(remove)
+        for k in remove:
+            if not k in out:
+                raise ValueError("unnecessary remove", k)
         out = {k: v for (k, v) in out.items() if k not in remove}
     out.update(new)
     collector.append((new_key, out))
@@ -503,7 +506,6 @@ inherit(
         "pbdSLAP": "build is broken with mpi trouble",
         "permGPU": "build is broken, needs nvcc",
         "plethy": "wants RSQLite 1.0.0, which only appeared on 14-10-25",
-        "pmclust": "build is broken with mpi trouble",
         "qtpaint": "missing libQtCore.so.4 and was listed as broken in nixpkgs 15.09",
         "QuasR": "requires BiocInstaller",
         "Rcplex": "unfree. Cplex not in nixpkgs",
@@ -579,7 +581,6 @@ inherit(
         "ChIPpeakAnno": "requires BiocInstaller",
         "cudaBayesreg": "build is broken, needs nvcc",
         "doMPI": "build is broken with mpi trouble",
-        "HierO": "can't find BWidget",
         "HilbertVisGUI": "needs OpenCL, not available in nixpkgs 15.09",
         "HiPLARM": "build is broken, and the package never got any updates and was removed in 2017-07-02",
         "iFes": "nvcc  Unsupported gpu architecture 'compute_10'",
@@ -595,7 +596,6 @@ inherit(
         "OpenCL": "needs OpenCL, not available in nixpkgs 15.09",
         "pbdSLAP": "build is broken with mpi trouble",
         "permGPU": "build is broken, needs nvcc",
-        "pmclust": "build is broken with mpi trouble",
         "qdap": "build segfaults",
         "qtpaint": "missing libQtCore.so.4 and was listed as broken in nixpkgs 15.09",
         "QuasR": "requires BiocInstaller",
@@ -645,7 +645,7 @@ inherit(
     {
         "h5": "no hdf5.dev in this nixpkgs",
     },
-    ["PPA"],
+    [],
 )
 
 inherit(broken_packages, ("3.1", "2015-05-16"), {}, ["bamboo"])
@@ -696,7 +696,6 @@ inherit(  # start anew.
         "SVGAnnotation": "github only?",
         "RcppAPT": "needs APT/Debian system",
         "RSAP": "misssing sapnwrfc.h",
-        "HierO": "can't find BWidget",
         "HiPLARM": "build is broken, and the package never got any updates and was removed in 2017-07-02",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
         "interactiveDisplayBase": "wants to talk to bioconductor.org during installation",
@@ -729,7 +728,6 @@ inherit(  # start anew.
         "Rblpapi": "blpapi is bloomberg professional API - unfree, not in nixpkgs",
         "doMPI": "build is broken with mpi trouble",
         "regRSM": "MPI trouble",
-        "pmclust": "build is broken with mpi trouble",
         "V8": "mismatch between the nixpkgs version and what R wants",
         "Rmosek": "build is broken according to R/default.nix",  # that does come back up eventually, judging from 21.03
         "Rcplex": "unfree. Cplex not in nixpkgs",
@@ -757,7 +755,7 @@ inherit(broken_packages, ("3.2", "2016-02-08"), {}, ["spliceSites"])
 
 inherit(  # start anew.
     broken_packages,
-    ("3.3"),
+    ("3.3"),  # 2016-05-04
     {
         "XMLRPC": "(omegahat / github only?)",
         "SVGAnnotation": "github only?",
@@ -768,7 +766,7 @@ inherit(  # start anew.
 )
 
 inherit(  # start anew.
-    broken_packages,
+    broken_packages,  # 2016-10-18
     ("3.4"),
     {
         "XMLRPC": "(omegahat / github only?)",
@@ -791,14 +789,11 @@ inherit(  # start anew.
         "CountClust": "object 'switch_axis_position' is not exported by 'namespace:cowplot', try newer cowplot after 2017-07-30",
         "cudaBayesreg": "build is broken, needs nvcc",
         "dbplyr": "only shows up on 2017-06-10",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "devEMF": "undefined symbol: XftCharExists",
         "EMCC": "'template with c linkage' error",
         "GenomicFeatures": "needs Rsqlite=2.0, try after 2017-06-19",
-        "googleformr": "wants to access the net",
         "gpuR": "OpenCL",
         "h5": "won't find h5c++",
-        "HierO": "can't find BWidget",
         "HiPLARM": "build is broken, and the package never got any updates and was removed in 2017-07-02",
         "IlluminaHumanMethylation450k.db": 'build fails with "fun is defunct"',
         "interactiveDisplay": "tries to access bioconductor.org",
@@ -827,7 +822,6 @@ inherit(  # start anew.
         "RcppOctave": "build seems incompatible with octave version in nixpkgs.",
         "remoter": "error: file '~' does not exist",
         "rhdf5": "wrong hdf5.dev version?",
-        "RKEELjars": "downloads jars from github",
         "rlo": "needs python&numpy",  # todo: decide how we take the python to use
         "Rmosek": "needs 'mosek', unavailable",
         "rmumps": "needs libseq, can't find in nixpkgs 17.03",
@@ -871,7 +865,7 @@ inherit(
 
 inherit(  # start anew.
     broken_packages,
-    ("3.6"),
+    ("3.6"),  # 2017-10-31
     {
         "AnnotationHub": "missing BiocInstaller - todo: patch?",
         "bgx": "c error",
@@ -883,14 +877,11 @@ inherit(  # start anew.
         "chinese.misc": "Wants write access to nix store. Possibly patchable",
         "clpAPI": "missing clp library",
         "cudaBayesreg": "build is broken, needs nvcc",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "devEMF": "undefined symbol: XftCharExists",
         "flipflop": "cpp template error",
         "genomation": "needs Rcpp 0.12.14, available 2017-11-24",
-        "googleformr": "attempts to contact docs.google.com",
         "gpuR": "needs opencl",
         "h5": "can't find h5c++",
-        "HierO": "can't find BWidget",
         "humarray": "needs biocInstaller",
         # "igraph": "C error in compilation",
         "interactiveDisplay": "tries to access bioconductor.org",
@@ -898,7 +889,6 @@ inherit(  # start anew.
         "limmaGUI": "install needs BiocInstaller",  # todo: patch
         "metScanR": "could not resolve hostname",
         "mongolite": "mongolite.so: undefined symbol: BIO_push",
-        "multiMiR": "Could not resolve host: multimir.ucdenver.edu",
         "MutationalPatterns": "needs cowplot 0.9.2, available 2017-12-18",
         # "nloptr": "undefined symbol:  nlopt_set_ftol_abs- version mismatch?",
         "odbc": "can't find unixodbc-dev, possibly patchable?",  # todo
@@ -920,7 +910,6 @@ inherit(  # start anew.
         "remoter": "error: file '~' does not exist",
         "rhdf5": "fails to compile, wrong type?",
         "Rhdf5lib": " no libhdf5.a found",
-        "RKEELjars": "downloads jars from github",
         "rlo": "needs python&numpy",
         "Rmosek": "needs 'mosek', unavailable",
         "rmumps": "needs libseq, can't find in nixpkgs 17.09",
@@ -957,7 +946,6 @@ inherit(  # start anew.
         "Cyclops": "error: 'complex' in namespace 'std' does not name a template type",
         "pbdSLAP": "mpi trouble",
         "esATAC": "requires BiocInstaller",
-        "nearfar": " cannot open the connection to 'https://raw.githubusercontent.com/joerigdon/nearfar/master/angrist.csv'",
         "facopy": "object 'setting.graph.attributes' is not exported by 'namespace:DOSE'",
         "bgx": "c error",
         "bsts": "error: 'class BOOM::StateSpaceModelBase' has no member named 'one_step_prediction_errors'",
@@ -970,21 +958,16 @@ inherit(  # start anew.
         "clpAPI": "missing clp library",
         "ClusterSignificance": "needs princurve =2.0.4 available starting 2018-07-15",
         "cudaBayesreg": "build is broken, needs nvcc",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "devEMF": "undefined symbol: XftCharExists",
         "dSimer": "no matching function for call to 'std::tr1::unordered_map<std::__cxx11::basic_string<char, float>::ins",  # and no update within this release
         "flipflop": "cpp template error",
         "ggtree": "needs ggplot = 2.2.1.9000, try after 2018-07-03",
-        "googleformr": "attempts to contact docs.google.com",
-        "kazaam": "mpi trouble, segfaults, wrong plm_rsh_agent parameter",
         "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
         "gpuR": "needs opencl",
         "HBP": "requires biocInstaller during installation",
         "h5": "no hdf5.dev in this nixpkgs",
-        "HierO": "can't find BWidget",
         "interactiveDisplay": "tries to access bioconductor.org",
         "kmcudaR": "build is broken, needs nvcc",
-        "multiMiR": "Could not resolve host: multimir.ucdenver.edu",
         # "oligoClasses": "requires biocInstaller during installation",
         "Onassis": "Vignette engine 'knitr' is not registered by any of the packages 'knitr'",
         "OpenCL": "needs OpenCL, not available in nixpkgs 17.03",
@@ -1001,7 +984,6 @@ inherit(  # start anew.
         "ReporteRs": "fgmutils 0.9.4 needs that,though ReporteRs (and ReporteRsjars) is no longer in CRAN",
         # "ReporteRsjars": "removed from cran, but still in packages",
         "Rhdf5lib": " no libhdf5.a found",
-        "RKEELjars": "downloads jars from github",
         "rlo": "Needs python/numpy",
         "Rmosek": "needs 'mosek', unavailable",
         "ROracle": "unfree. Oracle OCI not in nixpkgs",
@@ -1069,7 +1051,6 @@ inherit(
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
         "clpAPI": "missing clp library",
         "cudaBayesreg": "build is broken, needs nvcc",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "devEMF": "undefined symbol: XftCharExists",
         "dSimer": "no matching function for call to 'std::tr1::unordered_map<std::__cxx11::basic_string<char, float>::ins",  # and no update within this release
         "flipflop": "cpp template error",
@@ -1077,18 +1058,15 @@ inherit(
         "GENEAsphere": "object 'epoch.apply' is not exported by 'namespace:GENEAread, try after 2018-11-16",
         "GEOquery": "needs readr >= 1.3.1, try after 2018-12-22",
         "ggtree": "object 'as_tibble' is not exported by 'namespace:tidytree",  # todo: find out when  it's back...
-        "googleformr": "attempts to contact docs.google.com",
         "gpuR": "needs opencl",
         "greengenes13.5MgDb": 'invalid class "MgDb" object: 1: invalid object for slot "taxa" in class "MgDb":',
         # "gWidgetstcltk": ' [tcl] invalid command name "font".',
         "h5": "no hdf5.dev in this nixpkgs",
         "HBP": "needs BiocInstaller",
-        "HierO": "can't find BWidget",
         "interactiveDisplay": "tries to access bioconductor.org",
         "kazaam": "mpi trouble",
         "kmcudaR": "build is broken, needs nvcc",
         # "multibiplotGU" "gWidgets2tcltk": ' [tcl] invalid command name "font".',
-        "multiMiR": "Could not resolve host: multimir.ucdenver.edu",
         # "nloptr": "undefined symbol:  nlopt_set_ftol_abs- version mismatch?",  # todo: I suspect something different behind this
         "OpenCL": "needs OpenCL, not available in nixpkgs 18.09",
         # "optbdmaeAT": '[tcl] invalid command name "font".',
@@ -1106,7 +1084,6 @@ inherit(
         "RGtk2": "needs gtk 2.8, nixpkgs 18.09 has 2.24",
         "Rhdf5lib": " no libhdf5.a found",
         "ribosomaldatabaseproject11.5MgDb": 'error: invalid class "MgDb" object: 1: invalid object for slot "taxa" in class "MgDb": got class "tbl_dbi",',  # todo This might work again when metagenomeFeatures is updated? some time after 2019-01-31...
-        "RKEELjars": "downloads jars from github",
         "rlo": "needs python&numpy",
         "Rmosek": "needs 'mosek', unavailable",
         "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
@@ -1139,13 +1116,10 @@ inherit(  # start anew. - 2019-03-05
         "clpAPI": "missing clp library",
         "cola": "needs circlize 0.4.7, available 2021-08-22",
         "colormap": "  ** testing if installed package keeps a record of temporary installation path-> cannot opon the connection?",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "devEMF": "undefined symbol: XftCharExists",
         "freetypeharfbuzz": "Downloads from github",
-        "googleformr": "attempts to contact docs.google.com",
         "gpuR": "needs opencl",
         "gtrellis": "needs circlize 0.4.8, available 2021-10-22",
-        "HierO": "can't find BWidget",
         "ical": "  ** testing if installed package keeps a record of temporary installation path-> cannot opon the connection?",
         "ImmuneSpaceR": "needs ggplot 3.2.0, try after 2019-06-17",
         "infercnv": "needs python",  # todo
@@ -1158,7 +1132,6 @@ inherit(  # start anew. - 2019-03-05
         "lawn": "fail with '# CHECK_EQ(0, result) failed\\n Expected: 0\\n Found: 22' - possibly a V8 version issue",
         "MAVE": "no matching function call",
         "mnlogit": " Error: object 'index' is not exported by 'namespace:mlogit', try after 2019-06-03",
-        "multiMiR": "talks to multimr.org",
         "nloptr": "undefined symbol: nlopt_remove_equality_constraints - version mismatch?",
         "OpenCL": "needs OpenCL, not available in nixpkgs 19.03",
         "opencv": "error: 'pencilSketch' was not declared in this scope",
@@ -1175,7 +1148,6 @@ inherit(  # start anew. - 2019-03-05
         "RcppMeCab": "undefined symbol: mecab_strerror",
         "Rcwl": "needs cwltool, not available in nixpkgs 19.03",
         "RGtk2": "needs gtk 2.8, nixpkgs 18.09 has 2.24",
-        "RKEELjars": "downloads jars from github",
         "rlo": "needs python&numpy",
         "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
         "ROracle": "unfree. Oracle OCI not in nixpkgs",
@@ -1222,21 +1194,15 @@ inherit(  # start anew.
         "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
         "charm": "deprecated / removed, but still in packages",
         "reactable": "only shows up on 2019-11-21",
-        "RKEELjars": "downloads jars from github",
-        "commonsMath": "cannot open URL 'https://search.maven.org/remotecontent?filepath=org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar'",
         "V8": " every downstream package fails with '# CHECK_EQ(0, result) failed\\n Expected: 0\\n Found: 22' - possibly a V8 version issue, but using 3_14 doesn't help",
         "freetypeharfbuzz": "Downloads from github",
-        "googleformr": "attempts to contact docs.google.com",
         "devEMF": "undefined symbol: XftCharExists",
         "pbdSLAP": "mpi trouble",
         # "bigGP": "undefined symbol: mpi_universe_size?",
-        # "commonsMath": "tries to download jar files",
         # "exifr": "Tries to talk to paleolimbot.github.io",
         # "h5": "won't find h5c++",
-        "HierO": 'invalid command name "ComboBox"',
         "kazaam": "mpi trouble",
         # "kmcudaR": "build is broken, needs nvcc",
-        "multiMiR": "talks to multimr.org",
         "nloptr": "undefined symbol: nlopt_remove_equality_constraints - version mismatch?",
         "kmcudaR": "build is broken, needs nvcc",
         "permGPU": "build is broken, needs nvcc",
@@ -1244,7 +1210,6 @@ inherit(  # start anew.
         # "redux": "needs hiredis, not found in nixpkgs",
         # "regRSM": "undefined symbol: mpi_universe_size?",
         "rlo": "needs python&numpy",
-        "salso": "https://dbdahl.github.io/rpackages/lib/linux/salso/0.1.3.tar.gz': status was 'Couldn't resolve host name'",
         "BiocSklearn": "needs python&sklearn",
         "Rmpi": "undefined symbol: mpi_universe_size?",
         "rpanel": "build broken, wants DISPLAY?",
@@ -1252,11 +1217,9 @@ inherit(  # start anew.
         "trio": "requires logiRec 1.6.1",
         "wrswoR.benchmark": "talks to github during install",
         "randstr": "queries www.random.org",
-        "interactiveDisplay": "'trying to use CRAN without setting a mirror'",
         "x12": "'error: argument is of length zero'?",
         "Rcwl": "needs cwltool, not available in 19.09",
         "gpuR": "OpenCL missing?",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "plyranges": "needs tidyselect =1.0.0 (available 2020-01-28)",
         "BiocPkgTools": "needs tidyselect =1.0.0 (available 2020-01-28)",
         "splatter": "needs checkmate 2.0.0 (available 2020-02-07)",
@@ -1269,9 +1232,7 @@ inherit(  # start anew.
 )
 inherit(broken_packages, ("3.10", "2019-11-08"), {}, ["trio"])  # see above for logiRec
 inherit(broken_packages, ("3.10", "2019-11-21"), {}, ["reactable"])
-inherit(
-    broken_packages, ("3.10", "2019-12-30"), {}, ["uavRst"]
-)  # update, might start to work
+inherit(broken_packages, ("3.10", "2019-12-30"), {}, [])  # update, might start to work
 inherit(
     broken_packages, ("3.10", "2020-01-28"), {}, ["plyranges", "BiocPkgTools"]
 )  # see above for tidyselect
@@ -1294,28 +1255,22 @@ inherit(  # start anew.
     ("3.11"),  # 2020-04-28
     {
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
-        "commonsMath": "cannot open URL 'https://search.maven.org/remotecontent?filepath=org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar'",
         "rGEDI": "'https://github.com/caiohamamura/libclidar/archive/v0.4.0.tar.gz': status was 'Couldn't resolve host name'",
-        "nearfar": "https://raw.githubusercontent.com/joerigdon/nearfar/master/angrist.csv': status was 'Couldn't resolve host name'",
         "terra": "ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db",  # tod: probably fixable
         "waddR": "tries to write to $home",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "bsseq": "needs Iranges>=2.22.2. Try after 2020-04-28",
-        "snapcount": "Could not resolve host: snaptron.cs.jhu.edu",
         "traitdataform": "attempts to contact 'https://raw.githubusercontent.com/EcologicalTraitData/ETS/v0.9/ETS.csv'",
         "rsbml": "libsmbl isn't packagd in nixpkg ",
         "gpuR": "OpenCL missing?",
         "RQuantLib": "hquantlib is a haskell package - don't think that's what's required?",
         "dmdScheme": "cannot open URL 'https://github.com/Exp-Micro-Ecol-Hub/dmdSchemeRepository/raw/master/schemes/dmdScheme_0.9.5.tar.gz'",
         "Rcwl": "needs cwltool, not available in nixpkgs 20.03",
-        "googleformr": "attempts to contact docs.google.com",
         "tricolore": "Error: object 'theme' is not exported by 'namespace:ggtern'",
         "devEMF": "undefined symbol: XftCharExists",
         "doMPI": "build is broken with mpi trouble",
         "freetypeharfbuzz": "Downloads from github",
         "gpuMagic": "needs opencl",
         "rdomains": " object 'predict.cv.glmnet' is not exported by 'namespace:glmnet', try after 2020-06-16?",
-        "HierO": 'invalid command name "ComboBox"',
         "kazaam": "mpi trouble",
         "kmcudaR": "build is broken, needs nvcc",
         "MTseeker": "deprecated / removed, but still in packages",
@@ -1330,13 +1285,11 @@ inherit(  # start anew.
         "Rblpapi": "blpapi is bloomberg professional API - unfree, not in nixpkgs",
         "Rcplex": "unfree. Cplex not in nixpkgs",
         "RIPSeeker": "deprecated / removed, but still in packages",
-        "RKEELjars": "downloads jars from github",
         "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
         "ROracle": "unfree. Oracle OCI not in nixpkgs",
         "rpanel": "build broken, wants DISPLAY?",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
         "rtfbs": "requeries rphast, which was removed from CRAN on 2020-03-03",
-        "salso": "https://dbdahl.github.io/rpackages/lib/linux/salso/0.1.3.tar.gz': status was 'Couldn't resolve host name'",
         "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
         "sybilSBML": "configure checks for /usr/include and /usr/local/include - and possibly also needs libsmbl, judging by the name?",
         "tkRplotR": 'error: [tcl] invalid command name "image".',
@@ -1347,10 +1300,8 @@ inherit(  # start anew.
         "CensMFM": "objects 'pmvn.genz', 'pmvt.genz' are not exported by 'namespace:tlrmvnmvt'",
         "CensSpatial": "objects 'pmvn.genz', 'pmvt.genz' are not exported by 'namespace:tlrmvnmvt'",
         "flowFit": "object 'Data' is not exported by 'namespace:flowCore'",
-        "interactiveDisplay": "'trying to use CRAN without setting a mirror'",
         "nethet": "needs parcor, which was archived",
-        "multiMiR": "talks to multimr.org",
-        "spiR": "could not resolve host: docs.google.com",
+        # "spiR": "could not resolve host: docs.google.com",
         "GO.db.": "AnnotationDbi 1.49.2 needed. Try 2020-04-28",
         "PFAM.db.": "AnnotationDbi 1.49.2 needed. Try 2020-04-28",
         "anopheles.db0.": "AnnotationDbi 1.49.2 needed. Try 2020-04-28",
@@ -1398,7 +1349,8 @@ inherit(
     ("3.11", "2020-04-29"),
     {},
     [
-        "bsseq" "GO.db.",
+        "bsseq",
+        "GO.db.",
         "PFAM.db.",
         "anopheles.db0.",
         "canine.db0.",
@@ -1462,10 +1414,8 @@ inherit(  # start anew. - 2020-10-28
     {
         "BiocPkgTools": "object 'html_text2' is not exported by 'namespace:rvest'",
         "biocthis": "requires usethis >=2.0.1, try after 2021-02-11",
-        "bitmexr": "please check your internet connection",
+        "bitmexr": "please check your internet connection. 'Crypto'. Please destroy another planet, ktxbye.",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
-        "commonsMath": "cannot open URL 'https://search.maven.org/remotecontent?filepath=org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar'",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "DESeq": "deprecated but still in PACKAGES.gz",
         "discrim": "The values passed to `set_encoding()` are missing arguments: 'allow_sparse_x'",
         "dmdScheme": "cannot open URL 'https://github.com/Exp-Micro-Ecol-Hub/dmdSchemeRepository/raw/master/schemes/dmdScheme_0.9.9.tar.gz'",
@@ -1476,19 +1426,13 @@ inherit(  # start anew. - 2020-10-28
         "freetypeharfbuzz": "Downloads from github",
         "FunciSNP.data": "deprecated but still in PACKAGES.gz",
         "GeneBook": "attempts to contact github",
-        "googleformr": "attempts to contact docs.google.com",
         "gpuMagic": "needs opencl",
         "gQTLBase": "objects 'clone', 'is.factor.ff' are not exported by 'namespace:ff'",
-        "HierO": 'invalid command name "ComboBox"',
-        "interactiveDisplay": "'trying to use CRAN without setting a mirror'",
         "kazaam": "mpi trouble",
         "kmcudaR": "build is broken, needs nvcc",
         "maGUI": "Error: object 'toptable' is not exported by 'namespace:limma'",
         "modeltime": "The values passed to `set_encoding()` are missing arguments: 'allow_sparse_x'",
-        "multiMiR": "talks to multimr.org",
-        "nearfar": "https://raw.githubusercontent.com/joerigdon/nearfar/master/angrist.csv': status was 'Couldn't resolve host name'",
         "networkBMA": "compilation failure",
-        "packagefinder": "cannot open the connection to 'https://CRAN.R-project.org/web/packages/packages.rds'",
         "parcor": "missing ppls",
         "pbdSLAP": "mpi trouble",
         "permGPU": "build is broken, needs nvcc",
@@ -1501,8 +1445,6 @@ inherit(  # start anew. - 2020-10-28
         "Rblpapi": "blpapi is bloomberg professional API - unfree, not in nixpkgs",
         "Rcplex": "unfree. Cplex not in nixpkgs",
         "Rcwl": "needs cwltool, not available in nixpkgs 20.03",
-        "rfaRm": "Could not resolve host: rfam.xfam.org",
-        "RKEELjars": "downloads jars from github",
         "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
         "Roleswitch": "deprecated but still in PACKAGES.gz",
         "ROracle": "unfree. Oracle OCI not in nixpkgs",
@@ -1511,13 +1453,10 @@ inherit(  # start anew. - 2020-10-28
         "rsbml": "libsmbl isn't packagd in nixpkg ",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
         "rTANDEM": "deprecated but still in PACKAGES.gz",
-        "salso": "https://dbdahl.github.io/rpackages/lib/linux/salso/0.1.3.tar.gz': status was 'Couldn't resolve host name'",
         # second wave
         "SeuratObject": "released later on 2021-01-16",
-        "snapcount": "Could not resolve host: snaptron.cs.jhu.edu",
         "spatstat.core": "released later on 2021-01-23",
         "spatstat.geom": "released later on 2021-01-16",
-        "spiR": "could not resolve host: docs.google.com",
         "spsComps": "released later on 2021-02-26",
         "spsUtil": "released later on 2021-02-17",
         "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
@@ -1550,11 +1489,9 @@ inherit(  # start anew.
     {
         "affyPara": "error: cannot add binding of '.affyParaInternalEnv' to the base environment",
         "bigmemoryExtras": "deprecated, but still in PACKAGES.gz",
-        "bitmexr": "please check your internet connection",
+        "bitmexr": "please check your internet connection. 'Crypto'. Please destroy another planet, ktxbye.",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
         "cbpManager": "Error in loadNamespace(x) : there is no package called 'markdown'",
-        "commonsMath": "cannot open URL 'https://search.maven.org/remotecontent?filepath=org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar'",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
         "dmdScheme": "cannot open URL 'https://github.com/Exp-Micro-Ecol-Hub/dmdSchemeRepository/raw/master/schemes/dmdScheme_0.9.9.tar.gz'",
         "expp": "object 'ripras' is not exported by 'namespace:spatstat' (apperantly needs spatstat <2.0)",
         "freetypeharfbuzz": "Downloads from github",
@@ -1562,105 +1499,60 @@ inherit(  # start anew.
         "gpuMagic": "needs opencl",
         "proj4": "configure: error: libproj and/or proj.h/proj_api.h not found in standard search locations.",  # todo
         "ChemmineOB": "  configure: error: libproj and/or proj.h/proj_api.h not found in standard search locations.",  # todo,
-        "tesseract": " tools/test.cpp:2:10: fatal error: allheaders.h: No such file or directory",  # todo
         "imcdatasets": 'path[1]="/homeless-shelter/.cache/R/BiocFileCache": No such file or directory',
         "genoset": "deprecated, but still in PACKAGES.gz",
         "ggfun": "show up on 2021-07-02",
-        "googleformr": "attempts to contact docs.google.com",
-        "HierO": 'invalid command name "ComboBox"',
         "IDSpatialStats": "Error: object 'bounding.box.xy' is not exported by 'namespace:spatstat' (apperantly needs spatstat <2.0)",
-        "immunotation": "Could not resolve host: services.healthtech.dtu.dk",
-        "interactiveDisplay": "'trying to use CRAN without setting a mirror'",
-        "iriR": "Could not resolve host: warin.ca",
         "kazaam": "mpi trouble",
         "kmcudaR": "build is broken, needs nvcc",
         "mlbstatsR": "Could not resolve host: site.api.espn.com",
-        "multiMiR": "talks to multimr.org",
-        "nearfar": "https://raw.githubusercontent.com/joerigdon/nearfar/master/angrist.csv': status was 'Couldn't resolve host name'",
-        "nfl4th": "error: cannot open the connection to 'https://github.com/leesharpe/nfldata/blob/master/data/games.rds?raw=true'",
-        "packagefinder": "cannot open the connection to 'https://CRAN.R-project.org/web/packages/packages.rds'",
         "PANTHER.db": "Directory of lock file does not exist: '/homeless-shelter/.cache/R/AnnotationHub'",
         "pbdSLAP": "mpi trouble",
-        "pmclust": "build is broken with mpi trouble",
         "Rblpapi": "blpapi is bloomberg professional API - unfree, not in nixpkgs",
         "Rcplex": "unfree. Cplex not in nixpkgs",
         "RDAVIDWebService": "deprecated, but still in PACKAGES.gz",
-        "ReactomeContentService4R": "Could not resolve host: reactome.org",
-        "rfaRm": "Could not resolve host: rfam.xfam.org",
-        "RKEELjars": "downloads jars from github",
         "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
         "ROracle": "unfree. Oracle OCI not in nixpkgs",
         "rpanel": "build broken, [tcl] can't find package BWidget.",
         "RQuantLib": "hquantlib is a haskell package - don't think that's what's required?",
         "rsbml": "libsmbl isn't packagd in nixpkg ",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
-        "salso": "https://dbdahl.github.io/rpackages/lib/linux/salso/0.1.3.tar.gz': status was 'Couldn't resolve host name'",
         "sbw": "object 'unnormdensity' is not exported by 'namespace:spatstat' (apperantly needs spatstat <2.0)",
-        "snapcount": "Could not resolve host: snaptron.cs.jhu.edu",
         "spANOVA": "Error: object 'anova.sarlm' is not exported by 'namespace:spatialreg'",
-        "spiR": "Could not resolve host: warin.ca",
         "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
         "terra": "ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db",  # tod: probably fixable
         "yulab.utils": "show up on 2021-08-17",
         "AntMAN": "disappars from packages.gz, presumably because sdols is no longer present after 2021-03-30. There is an update on 2021-07-23, try after that date",
-        "waddR": "download failedhttps://github.com/goncalves-lab/waddR-data/blob/master/data/empcdf_ref.RData?raw=true'",
     },
 )
 
 inherit(broken_packages, ("3.13", "2021-07-02"), {}, ["ggfun"])
-inherit(broken_packages, ("3.13", "2021-07-23"), {}, ["AntMan"])
+inherit(broken_packages, ("3.13", "2021-07-23"), {}, ["AntMAN"])
 inherit(broken_packages, ("3.13", "2021-08-17"), {}, ["yulab.utils"])
 inherit(  # start anew.
     broken_packages,
     ("3.14"),  # 2021-10-27
     {
-        # actual build failures
+        # actual build failures / things we might be able to fix
         "arrow": "version mismatch between nixpkgs and cran. Couldn't get it fixed :(",  # todo
-        "valse": "missing include for math.h",  # todo patch?
-        "tesseract": " tools/test.cpp:2:10: fatal error: allheaders.h: No such file or directory",  # todo
-        "pbdSLAP": "mpi trouble",
-        "HierO": 'invalid command name "ComboBox"',
-        "kazaam": "mpi trouble",
-        "pmclust": "build is broken with mpi trouble",
-        "Rmpi": "configure: error: Unknown type of mpi: use --with-Rmpi-type or RMPI_TYPE to specify it",  # todo : figure out and fix
-        "switchboard": 'error: [tcl] invalid command name "ttk::style".',
+        "pbdBASE": "either can't find symbol set_BLACS_APTS_in_R if you pass --enable-blacsexport, or can't find BI_Iam",
+        "Rsymphony": "can't find SYMPHONY in nixpkgs",
         # r version mismatches?
-        "cn.mops": "Error: object 'values' is not exported by 'namespace:IRanges",
-        # proprietary
+        "cn.mops": "Error: object 'values' is not exported by 'namespace:IRanges. TRy after 2021-10-28 (so tomorrow)",
+        # proprietary / unsupported by cran_tracker_for_nix
         "ROracle": "unfree. Oracle OCI not in nixpkgs",
         "Rcplex": "unfree. Cplex not in nixpkgs",
         "Rblpapi": "blpapi is bloomberg professional API - unfree, not in nixpkgs",
+        "bitmexr": "please check your internet connection. 'Crypto'. Please destroy another planet, ktxbye.",
+        "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
         # deps not in nixpkgs
         "RQuantLib": "hquantlib is a haskell package - don't think that's what's required?",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
-        "Rsymphony": "can't find SYMPHONY in nixpkgs",
         # opencl/nvcc
         "gpuMagic": "needs opencl",
         "kmcudaR": "build is broken, needs nvcc",
         "permGPU": "needs nvcc",
         # net access
-        "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
-        "immunotation": "Could not resolve host: services.healthtech.dtu.dk",
-        "googleformr": "attempts to contact docs.google.com",
-        "nearfar": "https://raw.githubusercontent.com/joerigdon/nearfar/master/angrist.csv': status was 'Couldn't resolve host name'",
-        "bitmexr": "please check your internet connection",
-        "rfaRm": "Could not resolve host: rfam.xfam.org",
-        "signatureSearch": 'could not find function "refreshHub"',
-        "spiR": "Could not resolve host: warin.ca",
-        "nfl4th": "error: Can't subset columns that don't exist.",
-        "iriR": "Could not resolve host: warin.ca",
-        "packagefinder": "cannot open the connection to 'https://CRAN.R-project.org/web/packages/packages.rds'",
-        "interactiveDisplay": "'trying to use CRAN without setting a mirror'",
-        "multiMiR": "talks to multimr.org",
-        "waddR": "download failed https://github.com/goncalves-lab/waddR-data/blob/master/data/empcdf_ref.RData?raw=true'",
-        "DeepBlueR": "attepmts to contact deepblue.mpi-inf.mpg.de",
-        "ReactomeContentService4R": "Could not resolve host: reactome.org",
-        "commonsMath": "cannot open URL 'https://search.maven.org/remotecontent?filepath=org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar'",
-        "RKEELjars": "downloads jars from github",
-        "snapcount": "Could not resolve host: snaptron.cs.jhu.edu",
-        "x13binary": "'https://github.com/x13org/x13prebuilt/raw/master/v1.1.57/linux/64/x13ashtml': status was 'Couldn't resolve host name'",
-        "salso": 'Error in download_staticlib("https://r.ddahl.org/staticlib/${name}_${version}/${target}.tar.gz',
-        "robis": "unresolved host rs.gbif.org",
     },
 )
 inherit(
@@ -1922,6 +1814,7 @@ additional_r_dependencies = {
             "densEstBayes": ["rstantools"],
             "qmix": ["rstantools"],
             "red": ["codetools"],
+            "valse": ["RcppGSL"],
         },
         "software": {
             "MicrobiotaProcess": [
@@ -1974,6 +1867,7 @@ inherit(
         "cit": ["gsl"],
         "Crossover": ["which"],
         "devEMF": ["pkgs.xlibs.libXft"],
+        "pmclust": ["openmpi", "openssh"],
         # "DiffBind": ["zlib"],
         "DirichletMultinomial": ["gsl"],
         "diversitree": ["gsl", "fftw"],
@@ -2014,10 +1908,10 @@ inherit(
         # "openssl": ["openssl"],
         "outbreaker": ["gsl"],
         "pander": ["pandoc", "which"],
-        "pbdMPI": ["openmpi"],
+        "pbdMPI": ["openmpi", "openssh"],
         "pbdNCDF4": ["netcdf"],
         "pbdPROF": ["openmpi"],
-        "pbdSLAP": ["openmpi"],
+        "pbdSLAP": ["openmpi", "openssh"],
         "PBSmapping": ["which"],
         "PBSmodelling": ["which"],
         "pcaPA": ["gsl"],
@@ -2225,7 +2119,7 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(native_build_inputs, ("3.2", "2015-11-21"), {}, ["CARramps", "rpud", "WideLM"])
+inherit(native_build_inputs, ("3.2", "2015-11-21"), {}, ["CARramps", "rpud"])
 
 
 inherit(
@@ -2247,7 +2141,6 @@ inherit(
     "3.5",
     {
         "devEMF": ["pkgs.xlibs.libXft", "x11"],
-        "pbdBASE": ["blas"],
         "xslt": ["pkgconfig", "libxslt"],
         "clpAPI": ["pkgconfig"],  # todo: if this works, remove exclusion from 3.0
         "gpg": ["gpgme"],
@@ -2276,7 +2169,7 @@ inherit(
         "permGPU": ["cudatoolkit"],
         "tesseract": ["tesseract", "leptonica"],
         "CHRONOS": ["which"],
-        "pbdBASE": ["blas", "liblapack"],
+        "pbdBASE": ["blas", "liblapack", "openmpi"],
         "sbrl": ["gsl_1", "gmp"],
         "AMOUNTAIN": ["gsl_1"],
         "bio3d": ["zlib"],
@@ -2412,6 +2305,7 @@ inherit(
         "RMariaDB": ["zlib", "pkgs.mysql.connector-c", "openssl"],
         "Rbowtie2": ["zlib"],
         "JMcmprsk": ["gsl_1"],
+        "kazaam": ["openmpi", "openssh"],
         "RcppCWB": [
             "pcre",
             "glib",
@@ -2783,6 +2677,7 @@ inherit(
         "V8": ["v8_3_14"],
         "websocket": ["openssl"],
         "writexl": ["zlib"],
+        "salso": rust_inputs("salso"),
     },
     ["rMAT", "rphast", "infuser", "rbugs", "VisuClust", "MSeasyTkGUI", "BayesH"],
     copy_anyway=True,
@@ -2962,7 +2857,6 @@ inherit(
         "PythonInR",
         "QUIC",
         "rggobi",
-        "rMAT",
         "rpg",
         "rTANDEM",
         "rtiff",
@@ -2993,6 +2887,9 @@ inherit(
         "rsbml": ["libSMBL", "pkgconfig"],
         "vdiffr": ["libpng"],
         "string2path": rust_inputs("string2path"),
+        "HierO": ["bwidget"],
+        "caviarpd": rust_inputs("caviarpd"),
+        "Rmpi": ["openmpi", "openssh"],
     },
     [
         "AMORE",
@@ -3178,9 +3075,7 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(
-    build_inputs, ("3.11", "2020-09-09"), {}, ["qtbase", "qtpaint"]  # Todo: fix date
-)
+inherit(build_inputs, ("3.11", "2020-09-09"), {}, ["qtbase"])  # Todo: fix date
 
 inherit(build_inputs, "3.12", {}, [], copy_anyway=True)
 inherit(
@@ -3208,7 +3103,6 @@ inherit_list(
         "Rmpi",  # tries to run MPI processes
         "gmatrix",  # requires CUDA runtime
         "sprint",  # tries to run MPI processes
-        "pbdMPI",  # tries to run MPI processes
     ],
 )
 inherit_list(
@@ -3219,15 +3113,13 @@ inherit_list(
         "bigGP",
     ],
 )  # tries to run MPI processes
-inherit_list(skip_check, "3.1", ["pbdMPI"], [], copy_anyway=True)
-inherit_list(skip_check, "3.2", ["pbdSLAP"], [], copy_anyway=True)
+inherit_list(skip_check, "3.1", [], [], copy_anyway=True)
+inherit_list(skip_check, "3.2", [], [], copy_anyway=True)
 inherit_list(skip_check, "3.3", [], [], copy_anyway=True)
 inherit_list(skip_check, "3.4", [], [], copy_anyway=True)
 inherit_list(skip_check, "3.5", [], [], copy_anyway=True)
 inherit_list(skip_check, "3.6", [], [], copy_anyway=True)
-inherit_list(
-    skip_check, "3.7", ["pbdSLAP", "kazaam"], ["gmatrix", "sprint"], copy_anyway=True
-)
+inherit_list(skip_check, "3.7", [], ["gmatrix", "sprint"], copy_anyway=True)
 inherit_list(
     skip_check,
     "3.8",
@@ -3355,6 +3247,7 @@ needs_x = set(  # let's presume they never go from 'need X' no 'not need X'
         "pcrsim",
         "MSeasyTkGUI",
         "imager",
+        "switchboard",
     ]
 )
 
@@ -3364,7 +3257,11 @@ needs_rust = {
     "gifski": "gifski/src/myrustlib",
     "baseflow": True,  # use cran_tracker_for_nix/carosg/pkg_version/Cargo.lock. Because the package has none.
     "string2path": "string2path/src/rust",
+    "salso": "salso/src/rustlib",
+    "caviarpd": "caviarpd/src/rustlib",
 }
+
+patches_by_package_version = {}
 
 patches = []
 inherit(
@@ -3443,15 +3340,34 @@ inherit(
         "affylmGUI": [nl("./../patches/affylmGUI_1.50.0.no_bioc_installer.patch")],
         "qtbase": [nl("./../patches/qtbase_1.0.14.patch")],
         "tesseract": [nl("./../patches/tesseract_1.4.patch")],
+        "googleformr": [
+            nl("./../patches/googleformr.patch")
+        ],  # must prevent net access during install
+        "DeepBlueR": [
+            nl("./../patches/DeepBlueR.patch")
+        ],  # must prevent net access during install
+        "RKEELjars": [
+            nl("./../patches/RKEELjars.patch")
+        ],  # must prevent net access during install
     },
     copy_anyway=True,
 )
-inherit(patches, "3.6", {}, copy_anyway=True)
+inherit(
+    patches,
+    "3.6",
+    {
+        "multiMiR": [
+            nl("./../patches/multiMiR.patch")
+        ],  # must prevent net access during install
+    },
+    copy_anyway=True,
+)
 inherit(
     patches,
     "3.7",
     {
         "tesseract": [nl("./../patches/tesseract.patch")],
+        "nearfar": [nl("./../patches/nearfar.patch")],
     },
     [
         "EMCluster",
@@ -3477,6 +3393,8 @@ inherit(
         "Rhdf5lib": [nl("./../patches/Rhdf5lib.patch")],
         "tesseract": [nl("./../patches/tesseract.patch")],
         "qtbase": [nl("./../patches/qtbase_1.0.14.patch")],
+        "interactiveDisplay": [nl("./../patches/interactiveDisplay.patch")],
+        "commonsMath": [nl("./../patches/commonsMath.patch")],
     },
     [
         "BayesLogit",
@@ -3486,17 +3404,56 @@ inherit(
 inherit(
     patches,
     "3.11",
-    {},
+    {
+        "snapcount": [nl("./../patches/snapcount.patch")],
+        "spiR": [nl("./../patches/spiR.patch")],
+    },
     ["mongolite"],
     copy_anyway=True,
 )
-inherit(patches, "3.12", {}, ["qtbase", "SDMTools"], copy_anyway=True)
-inherit(patches, "3.13", {}, ["tesseract"], copy_anyway=True)
+inherit(
+    patches,
+    "3.12",
+    {
+        "rfaRm": [
+            nl("./../patches/rfaRm.patch")
+        ],  # try() around on-load network access
+        "packagefinder": [nl("./../patches/packagefinder.patch")],
+    },
+    ["qtbase", "SDMTools"],
+    copy_anyway=True,
+)
+inherit(
+    patches,
+    "3.13",
+    {
+        "immunotation": [
+            nl("./../patches/immunotation.patch")
+        ],  # try() around on-load network access
+        "ReactomeContentService4R": [
+            nl("./../patches/ReactomeContentService4R.patch")
+        ],  # try() around on-load network access
+        "iriR": [nl("./../patches/iriR.patch")],  # try() around on-load network access
+        "waddR": [
+            nl("./../patches/waddR.patch")
+        ],  # try() around on-load network access
+        "nfl4th": [
+            nl("./../patches/nfl4th.patch")
+        ],  # try() around on-load network access
+        "tesseract": [nl("./../patches/tesseract_4.1.2.patch")],
+    },
+    [],
+    copy_anyway=True,
+)
 inherit(
     patches,
     "3.14",
     {
+        "robis": [nl("./../patches/robis.patch")],
         "SCATEData": [nl("./../patches/SCATEData.patch")],
+        "x13binary": [nl("./../patches/x13binary_1.57.patch")],
+        "signatureSearch": [nl("./../patches/signatureSearch.patch")],
+        "valse": [nl("./../patches/valse.patch")],
     },
     [],
     copy_anyway=True,
@@ -3509,8 +3466,6 @@ inherit(
 # )
 
 patches = inherit_to_dict(patches)
-
-patches_by_package_version = {}
 
 attrs = []
 shebangs = {"postPatch": "patchShebangs configure"}
@@ -3559,7 +3514,13 @@ inherit(
         """
         },
         "Rmpfr": {"configureFlags": ["--with-mpfr-include=${pkgs.mpfr}/include"]},
-        "Rmpi": {"configureFlags": ["--with-Rmpi-type=OPENMPI"]},
+        "Rmpi": {
+            "configureFlags": [
+                "--with-Rmpi-type=OPENMPI",
+                "--with-Rmpi-include=${pkgs.openmpi}/include",
+                "--with-Rmpi-libpath=${pkgs.openmpi}/lib",
+            ]
+        },
         "RMySQL": {"MYSQL_DIR": "${pkgs.mysql.lib}"},
         "rpf": shebangs,
         "rpud": {
@@ -3616,7 +3577,19 @@ inherit(
 )
 
 
-inherit(attrs, "3.1", {}, copy_anyway=True)
+inherit(
+    attrs,
+    "3.1",
+    {
+        "HierO": {
+            "postUnpack": """
+sed -i '3iaddTclPath\("${pkgs.bwidget}/lib"\)' /build/HierO/R/HierO.R
+head /build/HierO/R/HierO.R -n 5
+"""
+        },
+    },
+    copy_anyway=True,
+)
 
 inherit(
     attrs,
@@ -3670,7 +3643,24 @@ inherit(
     },
     ["CARramps", "rpud", "WideLM"],
 )
-inherit(attrs, "3.3", {}, copy_anyway=True)
+inherit(
+    attrs,
+    "3.3",
+    {
+        "RKEELjars": {
+            # rkeel used to download from it's 'master' branch. I have fixed it to the respective releases.
+            # you could do it by date and commit,
+            # but I ain't got time for such shenanigans
+            "JAR_DOWNLOAD": nix_literal(
+                """builtins.fetchurl{
+        url = "https://github.com/i02momuj/RKEEL/raw/d1665d7a6bda3ab1e37c654ada97cefb39e48cf2/RKEELjars/RKEELjars.zip";
+        sha256 = "793490633b0a830702db531dd348b42dae6e2ea9"; 
+        }"""
+            )
+        },  # todo: fix hash
+    },
+    copy_anyway=True,
+)
 inherit(
     attrs,
     "3.4",
@@ -3793,6 +3783,14 @@ inherit(
     {
         "walker": shebangs,
         "fulltext": fake_home,
+        "RKEELjars": {
+            "JAR_DOWNLOAD": nix_literal(
+                """builtins.fetchurl{
+url = "https://github.com/i02momuj/RKEEL/raw/d1665d7a6bda3ab1e37c654ada97cefb39e48cf2/RKEELjars/RKEELjars.zip";
+sha256 = "10rx41n8i90y91v138m3yx22zblzh9inlcrl4ghkbywlj5i16vzh"; 
+}"""
+            )
+        },  # todo: fix hash
     },
     ["gmatrix", "gputools", "RGraphM"],
     copy_anyway=True,
@@ -3841,6 +3839,14 @@ inherit(
             substituteInPlace src/Makevars --replace "export CARGO_HOME=\$(PWD)/.cargo" ""
             """
         },
+        "RKEELjars": {
+            "JAR_DOWNLOAD": nix_literal(
+                """builtins.fetchurl{
+url = "https://github.com/i02momuj/RKEEL/raw/fb64fc16ad4478e377877026ec59aa913b705292/RKEELjars/RKEELjars.zip";
+sha256 = "10rx41n8i90y91v138m3yx22zblzh9inlcrl4ghkbywlj5i16vzh"; 
+}"""
+            )
+        },  # todo: fix hash
         #
     },
     ["MAINT.Data"],
@@ -3899,8 +3905,30 @@ inherit(
         # "ExperimentHub": {
         # "postInstall": "R --no-save -e 'library(ExperimentHub);ExperimentHub(localHub=F)'"
         # },
+        "commonsMath": {
+            "COMMONS_MATH_JAR": nix_literal(
+                """builtins.fetchurl{
+url = "https://search.maven.org/remotecontent?filepath=org/apache/commons/commons-math3/3.6.1/commons-math3-3.6.1.jar";
+sha256 = "025ky9z9rfqwgp6l7yl8sp0p9dl57274bf2nsamnb2yjb2qdfmhy"; }
+"""
+            ),
+            "PARALLEL_COLLECTIONS": nix_literal(
+                """builtins.fetchurl{
+url = "https://search.maven.org/remotecontent?filepath=org/scala-lang/modules/scala-parallel-collections_2.13/0.2.0/scala-parallel-collections_2.13-0.2.0.jar";
+sha256 = "1lbf4hqz8l2svz5ic49bhmnqsm1db26srld3aanfk64b63qj4pyi"; }
+"""
+            ),
+        },
+        "RKEELjars": {
+            "JAR_DOWNLOAD": nix_literal(
+                """builtins.fetchurl{
+url = "https://github.com/i02momuj/RKEEL/raw/445cd8cceade2316bc12d40406c7c1248e2daeaa/RKEELjars/RKEELjars.zip";
+sha256 = "10rx41n8i90y91v138m3yx22zblzh9inlcrl4ghkbywlj5i16vzh";
+}"""
+            )
+        },
     },
-    ["iFes", "SJava", "Mposterior", "gputools", "gmatrix"],
+    [],
     copy_anyway=True,
 )
 inherit(
@@ -3938,8 +3966,18 @@ inherit(
             substituteInPlace tools/staticlib.R --replace "Sys.setenv(CARGO_HOME = cargo_home_backup)" ""
             """
         },
+        "salso": {
+            "postPatch": """
+            substituteInPlace tools/cargo.R --replace "env <- c(env, CARGO_HOME=n(cargo_home))" ""
+            """
+        },
+        "caviarpd": {
+            "postPatch": """
+            substituteInPlace tools/cargo.R --replace "env <- c(env, CARGO_HOME=n(cargo_home))" ""
+            """
+        },
     },
-    ["glpkAPI", "JuniperKernel", "rPython", "uavRst"],
+    ["JuniperKernel", "rPython", "uavRst"],
     copy_anyway=True,
 )
 inherit(
@@ -4052,6 +4090,14 @@ cp $jarSource/h2o.jar /build/h2o/inst/java
             substituteInPlace src/Makevars.in --replace "--release" "--release --offline"
             """,
             "preConfigure": "export NOT_CRAN=true\n",
+        },
+        "x13binary": {
+            "X13BINARY": nix_literal(
+                """builtins.fetchurl{
+url = "https://github.com/x13org/x13prebuilt/raw/master/v1.1.57/linux/64/x13ashtml";
+sha256 = "0lpn41lvj4k38ld1w2v9q99gm4bs35ja2zygrndax12rk2a6qjf4";
+}"""
+            )
         },
     },
     ["freetypeharfbuzz", "collapse"],
