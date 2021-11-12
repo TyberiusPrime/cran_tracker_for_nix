@@ -1534,9 +1534,10 @@ inherit(  # start anew.
     ("3.14"),  # 2021-10-27
     {
         # actual build failures / things we might be able to fix
+        # arrow & rsymphony together is about 13 packages that are still missing. 9 arrow, 4 RSymphony
         "arrow": "version mismatch between nixpkgs and cran. Couldn't get it fixed :(",  # todo
-        "pbdBASE": "either can't find symbol set_BLACS_APTS_in_R if you pass --enable-blacsexport, or can't find BI_Iam",
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
+        "pbdBASE": "either can't find symbol set_BLACS_APTS_in_R if you pass --enable-blacsexport, or can't find BI_Iam", # and nothing is depending on this package, apperantly, and it has been rehoved from cran in 2021-11-05
         # r version mismatches?
         "cn.mops": "Error: object 'values' is not exported by 'namespace:IRanges. TRy after 2021-10-28 (so tomorrow)",
         # proprietary / unsupported by cran_tracker_for_nix

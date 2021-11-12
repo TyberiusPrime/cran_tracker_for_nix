@@ -486,8 +486,8 @@ class BioconductorRelease:
             i = bisect.bisect_left(o, query_date)
             if i < len(o):
                 return archive_dates[o[i]]
-            else:  # beyond latest archived date?
-                raise ValueError()
+            else:  # beyond latest archived date?, use last
+                #raise ValueError(query_date, o[-2:])
                 return archive_dates[o[-1]]
 
         if kind in ("experiment", "annotation", "software"):
