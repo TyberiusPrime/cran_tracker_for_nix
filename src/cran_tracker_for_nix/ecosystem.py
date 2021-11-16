@@ -1,4 +1,5 @@
 import pypipegraph2 as ppg2
+import math
 import os
 import sys
 import collections
@@ -676,8 +677,9 @@ class REcoSystemDumper:
 
             self.marked_broken = set()
             self.marked_broken_indirectly = set()
-            if self.bioc_release.broken_packages:
-                for broken_pkg, reason in self.bioc_release.broken_packages.items():
+            bp = self.bioc_release.get_broken_packages_at_date(self.archive_date)
+            if bp:
+                for broken_pkg, reason in bp.items():
                     all_packages[broken_pkg]["broken"] = True
                     excluded_packages_notes[broken_pkg] = "broken: " + reason
                     self.marked_broken.add(broken_pkg)
@@ -880,7 +882,7 @@ class REcoSystemDumper:
                         )
                     )
 
-        return ppg2.JobGeneratingJob("add_cargos_to_flake", gen).depends_on(
+        return ppg2.JobGeneratingJob("add_cargos_to_flake_" + format_date(self.archive_date), gen).depends_on(
             job_packages
         )
 
@@ -1060,7 +1062,7 @@ class REcoSystemDumper:
             "--verbose",
             "--max-jobs",
             # "auto",
-            str(ppg2.util.CPUs() - 4),
+            str(int(math.ceil(ppg2.util.CPUs() * 1))),
             # "1",
             "--cores",
             "4",  # it's pretty bad at using the cores either way, so let's oversubscribe ab it...
@@ -1320,3 +1322,8 @@ def commit(add_paths=["data"], cwd=store_path.parent, message="autocommit"):
         return True
     else:
         raise ValueError("git error return", p.returncode, stdout)
+
+
+    # 568 s for srnadiff and dependencies
+    # 5s for check all installed
+    # 67s just srnadiff

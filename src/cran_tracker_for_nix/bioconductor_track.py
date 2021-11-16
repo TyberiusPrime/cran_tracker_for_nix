@@ -488,7 +488,7 @@ class BioconductorRelease:
                 return archive_dates[o[i]]
             else:  # beyond latest archived date?, use last
                 #raise ValueError(query_date, o[-2:])
-                return archive_dates[o[-1]]
+                return False #archive_dates[o[-1]]
 
         if kind in ("experiment", "annotation", "software"):
             if kind == "software":
@@ -533,10 +533,12 @@ class BioconductorRelease:
                     datetime.datetime.strptime(date, "%Y-%m-%d").date(): v
                     for (v, date) in version_dates
                 }
-                result[package]["version"] = find_right_archive_date(
+                v = find_right_archive_date(
                     archive_dates, query_date
                 )
-                result[package]["archive"] = True
+                if v: 
+                    result[package]["version"] = v
+                    result[package]["archive"] = True
 
         adr = bioconductor_overrides.additional_r_dependencies.get(
             self.str_version, {}
@@ -571,6 +573,15 @@ class BioconductorRelease:
             date,
             release_info=self.release_info,
         )  # which includes the inherited entries
+
+    def get_broken_packages_at_date(self, date):
+        return match_override_keys(
+            bioconductor_overrides.broken_packages,
+            self.str_version,
+            date,
+            release_info=self.release_info,
+        )  # which includes the inherited entries
+
 
     def get_flake_info_at_date(self, date, r_track):
         minor_r_version = self.get_R_version_including_minor(date, r_track)

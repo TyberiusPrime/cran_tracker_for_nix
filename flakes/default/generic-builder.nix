@@ -43,18 +43,17 @@ in stdenv.mkDerivation ({
   installFlags = (if attrs.doCheck or true then [ ] else [ "--no-test-load" ])
     ++ (if builtins.hasAttr "installFlags" attrs then attrs.installFlags else [ ])
     ++ [
-      "--byte-compile"
-      "--with-keep.source"
-      "--no-clean-on-error"
-      "--clean"
+      #"--byte-compile" # do not pass this. It forces byte compilation on packages that have it explicitly disabled
+      #"--with-keep.source" # Also greatly incresases compilation time and rdb output sizes
+      "--built-timestamp=0"
     ];
 
   rCommand = "R";
   # Unfortunately, xvfb-run has a race condition even with -a option, so that
   # we acquire a lock explicitly.
 
-  # that's not quite the truth. the -a relies on a shared /tmp as well.
-  # and we don't have a readily available per nixbuild-process
+  # that's not quite the truth, -a relies on a shared /tmp as well.
+  # We don't have a readily available per nixbuild-process
   # number
   # but we can guess a number, and then flock only that number
   # allowing multiple instances to run in a parallel most of the time
@@ -109,10 +108,11 @@ in stdenv.mkDerivation ({
   '';
 
   checkPhase = ''
-    # noop since R CMD INSTALL tests packages
-  '';
+  '';# noop since R CMD INSTALL tests packages
 } // attrs // {
-  name = "r-" + name;
+  name = "r-" + name + "-" + version;
 
   strictDeps = true;
 })
+
+

@@ -1558,10 +1558,9 @@ inherit(  # start anew.
 )
 inherit(
     broken_packages, ("3.14", "2021-10-28"), {}, ["cn.mops"]
-)  # is IRanges new enoug now
+)  # is IRanges new enough now
 
 broken_packages = inherit_to_dict(broken_packages)
-
 
 # for when a new package can't be used because a dependency hasn't
 # catched up yet, so we want to use an older version of the new package
@@ -2908,6 +2907,22 @@ inherit(
     copy_anyway=True,
 )
 
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-11-08"), {},
+ [
+	'pbdPROF',
+	'pbdSLAP',
+	'Rhpc',
+	'dynr',
+	'permGPU',
+	'pbdBASE',
+	'mvst',
+	'kmcudaR',
+	'KSgeneral',
+	'JMcmprsk',
+	'BALD',
+	])
 
 native_build_inputs = inherit_to_dict(native_build_inputs)
 
