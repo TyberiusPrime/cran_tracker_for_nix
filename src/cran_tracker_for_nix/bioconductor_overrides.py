@@ -350,12 +350,6 @@ flake_overrides = {
     "4.1.0": "4.1.0",
 }
 
-
-# dates for which the cran mirror consistently returns 500
-# so we don't have a packages.gz from that date
-blacklisted_cran_dates = ['2021-11-09']
-
-
 missing_in_packages_gz = {
     "3.13": {
         "IntramiRExploreR": {

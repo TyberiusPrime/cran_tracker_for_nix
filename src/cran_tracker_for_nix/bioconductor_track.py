@@ -405,7 +405,9 @@ class BioconductorRelease:
             d = datetime.datetime.strptime(str_date, "%Y-%m-%d").date()
             # we use these mostly in non-archived Bioconductor versions,
             # so it's safe to set archive date = snapshot date.
-            result.add((d, d))
+            # (that statement was a lie, because MRAN might be missing that date)
+            result.add((d, self.find_closest_available_snapshot(d, 
+                available)))
         return result
 
     def find_closest_archive_date(self, date: datetime.date):
