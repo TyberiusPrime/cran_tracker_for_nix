@@ -1843,6 +1843,9 @@ for k, v in additional_r_dependencies.items():
                 raise ValueError(f"entry for {k3} was not a list {v3}")
 
 
+def cran_track_package(name, overrides=''):
+    return ("CRAN_TRACK_PACKAGE", name, overrides)
+
 native_build_inputs = []  # ie. compile time dependencies
 # pkgs. get's added automatically if there's no . in the entry.
 inherit(
@@ -2889,7 +2892,7 @@ inherit(
         "terra": ["gsl_1", "gdal", "pkgconfig", "proj", "sqlite", "geos"],
         "valse": ["gsl_1"],
         "vapour": ["pkgconfig", "gdal", "proj", "geos", "sqlite"],
-        "rsbml": ["libSMBL", "pkgconfig"],
+        "rsbml": [cran_track_package("libSMBL"), "pkgconfig"],
         "vdiffr": ["libpng"],
         "string2path": rust_inputs("string2path"),
         "HierO": ["bwidget"],

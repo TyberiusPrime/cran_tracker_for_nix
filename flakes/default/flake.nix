@@ -9,23 +9,16 @@
     flake-utils.inputs.nixpkgs.follows = "nixpkgs";
     nixpkgs_master.url = # breakpointhook is not available before 19.03
       "github:nixOS/nixpkgs?rev=e55bd22bbca511c4613a33d809870792d7968d1c";
-    libSMBL = {
-      url =
-        "github:TyberiusPrime/libSMBL_flake?rev=f14d1a7cdfdbc486350a3694fb5cdb92afaf0236";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-    };
     import-cargo.url = "github:edolstra/import-cargo";
     import-cargo.inputs.nixpkgs.follows = "nixpkgs";
 
   };
 
-  outputs = { self, nixpkgs, flake-utils, nixpkgs_master, libSMBL, import-cargo }:
+  outputs = { self, nixpkgs, flake-utils, nixpkgs_master, import-cargo }:
 
     flake-utils.lib.eachDefaultSystem (system:
       let
         inherit (import-cargo.builders) importCargo;
-        libSMBL_ = libSMBL;
         pkgs = import nixpkgs {
           inherit system;
           config = {
@@ -46,7 +39,6 @@
                 patches = [ ]; # R_patches-generated
                 #additionalOverrides
               });
-              libSMBL = libSMBL_.defaultPackage.${system};
             };
           };
         };

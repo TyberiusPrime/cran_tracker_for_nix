@@ -1,3 +1,5 @@
+from logging import info
+import tempfile
 import pypipegraph2 as ppg2
 import time
 import math
@@ -314,6 +316,7 @@ class REcoSystemDumper:
 
         job_cargos = self.add_cargos_to_flake(output_path, job_packages)
         job_patches = self.add_patches_to_flake(output_path, job_packages)
+        job_flake_packages = self.add_packages_to_flake(output_path, job_packages)
 
         def dump_excluded_packages(output_filename):
             output_filename.write_text(
@@ -462,7 +465,8 @@ class REcoSystemDumper:
                             job_bioc_software,
                             job_bioc_annotation,
                             job_bioc_experiment,
-                            self.patch_job
+                            self.patch_job,
+                            self.package_job,
                         ]
                         + self.cargo_jobs
                     )
@@ -479,16 +483,14 @@ class REcoSystemDumper:
                 test_jobs.append(j)
 
             def mark_done(of):
-                final = (
-                    json.dumps(
-                        {
-                            "bioconductor": self.header["Bioconductor"],
-                            "R": self.header["R"],
-                            "archive_date": self.header["archive_date"],
-                            "snapshot_date": self.header["snapshot_date"],
-                            "nixpkgs": self.header["nixpkgs"],
-                        }
-                    ),
+                final = json.dumps(
+                    {
+                        "bioconductor": self.header["Bioconductor"],
+                        "R": self.header["R"],
+                        "archive_date": self.header["archive_date"],
+                        "snapshot_date": self.header["snapshot_date"],
+                        "nixpkgs": self.header["nixpkgs"],
+                    }
                 )
 
                 commit(
@@ -505,7 +507,11 @@ class REcoSystemDumper:
         if not (output_path / " done").exists():
             # no need to gen if we are done
             ppg2.JobGeneratingJob("gen_test" + self.name, gen_tests).depends_on(
-                job_packages, job_fill_flake, job_cargos, job_patches
+                job_packages,
+                job_fill_flake,
+                job_cargos,
+                job_patches,
+                job_flake_packages,
             )
 
     def load_packages(self):
@@ -776,7 +782,7 @@ class REcoSystemDumper:
 
     def clear_output(self, output_path):
         for fn in output_path.glob("*"):
-            if fn.name not in [".git", ".packages_tested.ignore", 'README.md']:
+            if fn.name not in [".git", ".packages_tested.ignore", "README.md"]:
                 if fn.is_symlink():
                     fn.unlink()
                 elif fn.is_dir():
@@ -844,6 +850,7 @@ class REcoSystemDumper:
                     "#additionalOverrides\n", flake_info.get("additionalOverrides", "")
                 )
             )
+            output = common.nix_pretty_print(output)
             (output_files[0]).write_text(output)
             (output_path / "generated").mkdir(exist_ok=True)
             if not (output_path / ".git").exists():  # flakes must be git repos
@@ -899,14 +906,15 @@ class REcoSystemDumper:
         def gen():
             all_the_patches = set()
             for name, info in self.package_info["all_packages"].items():
-                #if name == "robis":
-                    #raise ValueError(info)
-                for p in info.get('patches',''):
+                # if name == "robis":
+                # raise ValueError(info)
+                for p in info.get("patches", ""):
                     if is_nix_literal(p):  # literal from someplace else
                         pass
                     else:
                         all_the_patches.add(p)
             (output_path / "patches").mkdir(exist_ok=True)
+
             def copy(output_filename):
                 input_fn = flake_auxillaries_path / "patches" / output_filename.name
                 shutil.copy(input_fn, output_filename)
@@ -914,12 +922,39 @@ class REcoSystemDumper:
             self.patch_job = []
             for p in all_the_patches:
                 j = ppg2.FileGeneratingJob(
-                                output_path / "patches" / p , copy
-                            ).depends_on_file(flake_auxillaries_path / "patches" / p)
+                    output_path / "patches" / p, copy
+                ).depends_on_file(flake_auxillaries_path / "patches" / p)
                 self.patch_job.append(j)
 
         return ppg2.JobGeneratingJob(
             "add_patches_to_flake_" + format_date(self.archive_date), gen
+        ).depends_on(job_packages)
+
+    def add_packages_to_flake(self, output_path, job_packages):
+        def gen():
+            all_the_packages = set()
+            for name, info in self.package_info["all_packages"].items():
+                # if name == "robis":
+                # raise ValueError(info)
+                for k in ["native_build_inputs", "build_inputs"]:
+                    for p in info.get(k, []):
+                        if isinstance(p, tuple) and p[0] == "CRAN_TRACK_PACKAGE":
+                            all_the_packages.add(p[1])
+            (output_path / "packages").mkdir(exist_ok=True)
+
+            def copy(output_filename):
+                input_fn = flake_auxillaries_path / "packages" / output_filename.name
+                shutil.copy(input_fn, output_filename)
+
+            self.package_job = []
+            for p in all_the_packages:
+                j = ppg2.FileGeneratingJob(
+                    output_path / "packages" / (p + ".nix"), copy
+                ).depends_on_file(flake_auxillaries_path / "packages" / (p + ".nix"))
+                self.package_job.append(j)
+
+        return ppg2.JobGeneratingJob(
+            "add_packages_to_flake_" + format_date(self.archive_date), gen
         ).depends_on(job_packages)
 
     def write_readme(self, output_path):
@@ -948,14 +983,21 @@ class REcoSystemDumper:
         for (key, arg) in [
             ("native_build_inputs", "nativeBuildInputs"),
             ("build_inputs", "buildInputs"),
-            ("patches", "patches"),
         ]:
             if key in info:
-                if key == 'patches':
-                    out[arg] = [nix_literal('./../patches/' + x) for x in info['patches']]
-                else:
-                    out[arg] = info[key]
+                o = []
+                for p in info[key]:
+                    if isinstance(p, tuple) and p[0] == "CRAN_TRACK_PACKAGE":
+                        n = f"(pkgs.callPackage ./../packages/{p[1]}.nix {{}})"
+                        if p[2]:  # overrideAttr
+                            n += f".overrideAttr ({p[2]})"
+                        o.append(nix_literal(n))
+                    else:
+                        o.append(p)
 
+                out[arg] = o
+        if "patches" in info:
+            out["patches"] = [nix_literal("./../patches/" + x) for x in info["patches"]]
 
         if "attrs" in info:
             out["extra_attrs"] = info["attrs"]
@@ -979,7 +1021,7 @@ class REcoSystemDumper:
                 if v["source"] == "cran"
             }
 
-            with open(output_path, "w") as op:
+            with tempfile.TemporaryFile('w+') as op:
                 op.write("# generated by CranTrackForNix\n")
                 op.write(
                     "\n".join(
@@ -1047,6 +1089,11 @@ class REcoSystemDumper:
 
                     self._write_package(name, info, op)
                 op.write("}\n")
+                op.flush()
+                op.seek(0)
+                out = op.read()
+                out = common.nix_pretty_print(out)
+                output_path.write_text(out)
 
         return ppg2.FileGeneratingJob(output_path, gen).depends_on(
             self._load_header(),
@@ -1062,7 +1109,7 @@ class REcoSystemDumper:
                 if v["source"] == source
             }
             bioc_version = ".".join(self.bioc_version)
-            with open(output_path, "w") as op:
+            with tempfile.TemporaryFile('w+') as op:
                 op.write("# generated by CranTrackForNix\n")
                 op.write(
                     "\n".join(
@@ -1084,6 +1131,11 @@ class REcoSystemDumper:
                     op.write(f" {safe_name} = derive2")
                     self._write_package(name, info, op)
                 op.write("}\n")
+                op.flush()
+                op.seek(0)
+                out = op.read()
+                out = common.nix_pretty_print(out)
+                output_path.write_text(out) 
 
         return ppg2.FileGeneratingJob(output_path, gen).depends_on(
             self._load_header(),

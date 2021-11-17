@@ -1,12 +1,12 @@
-{ stdenv }:
+{ stdenv, pkgs }:
         stdenv.mkDerivation rec {
           pname = "libSMBL";
-          version = version;
+          version = "5.19.0";
 
-          src = fetchurl {
+          src = pkgs.fetchurl {
             url =
               "mirror://sourceforge/sbml/libsbml/${version}/stable/libSBML-${version}-core-plus-packages-src.tar.gz";
-            hash = hash;
+            hash = "sha256-p/Dhi+eP8OBk5M2xzYZjTQi8M75SUNtKGHi9ge64tUc=";
           };
 
           nativeBuildInputs = [
@@ -40,4 +40,4 @@
               library to help you read, write, manipulate, translate, and
               validate SBML files and data streams.'';
           };
-        };
+        }

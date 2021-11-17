@@ -453,3 +453,14 @@ def extract_snapshot_from_url(name, version, url):
         return matches[0]
     else:
         return None
+
+
+def nix_pretty_print(raw):
+    p = subprocess.Popen(['nix','shell','github:nixOS/nixpkgs?rev=7e9b0dff974c89e070da1ad85713ff3c20b0ca97#nixfmt', '-c', "nixfmt"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = p.communicate(raw.encode('utf-8'))
+    if p.returncode == 0:
+        return stdout.decode('utf-8')
+    else:
+        raise ValueError('nix pretty print error return', p.returncode, stderr)
+        return raw

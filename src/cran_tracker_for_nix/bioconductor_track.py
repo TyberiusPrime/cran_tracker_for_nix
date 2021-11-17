@@ -487,8 +487,8 @@ class BioconductorRelease:
             if i < len(o):
                 return archive_dates[o[i]]
             else:  # beyond latest archived date?, use last
-                #raise ValueError(query_date, o[-2:])
-                return False #archive_dates[o[-1]]
+                # raise ValueError(query_date, o[-2:])
+                return False  # archive_dates[o[-1]]
 
         if kind in ("experiment", "annotation", "software"):
             if kind == "software":
@@ -533,10 +533,8 @@ class BioconductorRelease:
                     datetime.datetime.strptime(date, "%Y-%m-%d").date(): v
                     for (v, date) in version_dates
                 }
-                v = find_right_archive_date(
-                    archive_dates, query_date
-                )
-                if v: 
+                v = find_right_archive_date(archive_dates, query_date)
+                if v:
                     result[package]["version"] = v
                     result[package]["archive"] = True
 
@@ -581,7 +579,6 @@ class BioconductorRelease:
             date,
             release_info=self.release_info,
         )  # which includes the inherited entries
-
 
     def get_flake_info_at_date(self, date, r_track):
         minor_r_version = self.get_R_version_including_minor(date, r_track)
@@ -668,6 +665,8 @@ class BioconductorRelease:
         # but it also handles cran packages
         def repl_dep(n):
             if is_nix_literal(n):
+                return n
+            elif isinstance(n, tuple) and (n[0] == "CRAN_TRACK_PACKAGE"):
                 return n
             elif "." not in n and (n != "breakpointHook"):
                 return nix_literal(f"pkgs.{n}")
@@ -823,5 +822,5 @@ def versions_from_archive(args):
         found = True
     if not found:
         raise ValueError()
-    time.sleep(0.1) # don't hammer the server, ok?
+    time.sleep(0.1)  # don't hammer the server, ok?
     return hit, result
