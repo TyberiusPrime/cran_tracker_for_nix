@@ -13,6 +13,7 @@ import base64
 store_path = Path(__file__).absolute().parent.parent.parent / "data"
 temp_path = Path(__file__).absolute().parent.parent.parent / "temp"
 flake_source_path = Path(__file__).absolute().parent.parent.parent / "flakes"
+flake_auxillaries_path = Path(__file__).absolute().parent.parent.parent / "flake_auxillaries"
 
 build_into_r = {
     # built in

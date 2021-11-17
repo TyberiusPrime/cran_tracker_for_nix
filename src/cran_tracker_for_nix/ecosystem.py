@@ -1,4 +1,5 @@
 import pypipegraph2 as ppg2
+import time
 import math
 import os
 import sys
@@ -18,9 +19,11 @@ from .bioconductor_track import BioConductorTrack
 from .cran_track import CranTrack
 from .r_track import RTracker
 from .common import (
+    is_nix_literal,
     store_path,
     format_date,
     flake_source_path,
+    flake_auxillaries_path,
     format_nix_value,
     parse_date,
     extract_snapshot_from_url,
@@ -310,6 +313,7 @@ class REcoSystemDumper:
         job_packages = self.load_packages()
 
         job_cargos = self.add_cargos_to_flake(output_path, job_packages)
+        job_patches = self.add_patches_to_flake(output_path, job_packages)
 
         def dump_excluded_packages(output_filename):
             output_filename.write_text(
@@ -458,6 +462,7 @@ class REcoSystemDumper:
                             job_bioc_software,
                             job_bioc_annotation,
                             job_bioc_experiment,
+                            self.patch_job
                         ]
                         + self.cargo_jobs
                     )
@@ -474,9 +479,7 @@ class REcoSystemDumper:
                 test_jobs.append(j)
 
             def mark_done(of):
-                commit(
-                    ["."],
-                    output_path,
+                final = (
                     json.dumps(
                         {
                             "bioconductor": self.header["Bioconductor"],
@@ -487,7 +490,13 @@ class REcoSystemDumper:
                         }
                     ),
                 )
-                of.write_text("Yes")
+
+                commit(
+                    ["."],
+                    output_path,
+                    final,
+                )
+                of.write_text("final")
 
             ppg2.FileGeneratingJob(output_path / "final_done", mark_done).depends_on(
                 test_jobs, self._load_header()
@@ -496,7 +505,7 @@ class REcoSystemDumper:
         if not (output_path / " done").exists():
             # no need to gen if we are done
             ppg2.JobGeneratingJob("gen_test" + self.name, gen_tests).depends_on(
-                job_packages, job_fill_flake, job_cargos
+                job_packages, job_fill_flake, job_cargos, job_patches
             )
 
     def load_packages(self):
@@ -767,7 +776,7 @@ class REcoSystemDumper:
 
     def clear_output(self, output_path):
         for fn in output_path.glob("*"):
-            if fn.name not in [".git", ".packages_tested.ignore"]:
+            if fn.name not in [".git", ".packages_tested.ignore", 'README.md']:
                 if fn.is_symlink():
                     fn.unlink()
                 elif fn.is_dir():
@@ -868,7 +877,7 @@ class REcoSystemDumper:
                         )
                         if not input_filename.exists():
                             input_filename = (
-                                common.store_path.parent
+                                flake_auxillaries_path
                                 / "cargos"
                                 / f"{name}_{ver}"
                                 / "Cargo.lock"
@@ -882,9 +891,36 @@ class REcoSystemDumper:
                         )
                     )
 
-        return ppg2.JobGeneratingJob("add_cargos_to_flake_" + format_date(self.archive_date), gen).depends_on(
-            job_packages
-        )
+        return ppg2.JobGeneratingJob(
+            "add_cargos_to_flake_" + format_date(self.archive_date), gen
+        ).depends_on(job_packages)
+
+    def add_patches_to_flake(self, output_path, job_packages):
+        def gen():
+            all_the_patches = set()
+            for name, info in self.package_info["all_packages"].items():
+                #if name == "robis":
+                    #raise ValueError(info)
+                for p in info.get('patches',''):
+                    if is_nix_literal(p):  # literal from someplace else
+                        pass
+                    else:
+                        all_the_patches.add(p)
+            (output_path / "patches").mkdir(exist_ok=True)
+            def copy(output_filename):
+                input_fn = flake_auxillaries_path / "patches" / output_filename.name
+                shutil.copy(input_fn, output_filename)
+
+            self.patch_job = []
+            for p in all_the_patches:
+                j = ppg2.FileGeneratingJob(
+                                output_path / "patches" / p , copy
+                            ).depends_on_file(flake_auxillaries_path / "patches" / p)
+                self.patch_job.append(j)
+
+        return ppg2.JobGeneratingJob(
+            "add_patches_to_flake_" + format_date(self.archive_date), gen
+        ).depends_on(job_packages)
 
     def write_readme(self, output_path):
         def gen(output_filename):
@@ -894,6 +930,7 @@ class REcoSystemDumper:
                 readme_text += f"  * {k}: {v}\n"
             readme_text += "\n"
             output_filename.write_text(readme_text)
+            time.sleep(1)
 
         return ppg2.FileGeneratingJob(output_path / "README.md", gen).depends_on(
             self._load_header()
@@ -914,7 +951,11 @@ class REcoSystemDumper:
             ("patches", "patches"),
         ]:
             if key in info:
-                out[arg] = info[key]
+                if key == 'patches':
+                    out[arg] = [nix_literal('./../patches/' + x) for x in info['patches']]
+                else:
+                    out[arg] = info[key]
+
 
         if "attrs" in info:
             out["extra_attrs"] = info["attrs"]
@@ -1322,7 +1363,6 @@ def commit(add_paths=["data"], cwd=store_path.parent, message="autocommit"):
         return True
     else:
         raise ValueError("git error return", p.returncode, stdout)
-
 
     # 568 s for srnadiff and dependencies
     # 5s for check all installed

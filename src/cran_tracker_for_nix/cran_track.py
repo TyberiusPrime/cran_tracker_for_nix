@@ -19,7 +19,7 @@ from .common import (
     dict_minus_keys,
     extract_snapshot_from_url,
 )
-from .bioconductor_overrides import match_override_keys, needs_rust
+from .bioconductor_overrides import match_override_keys, needs_rust, blacklisted_cran_dates
 from . import bioconductor_overrides
 
 
@@ -89,6 +89,7 @@ class CranTrack:
             return j
 
         snapshots = sorted(snapshot_dates)
+        snapshots = [x for x in snapshots if x not in blacklisted_cran_dates]
         sn_jobs = [download_snapshot_packages(s) for s in snapshots]
 
         def read_packages(fn):

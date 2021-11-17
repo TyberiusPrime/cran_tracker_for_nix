@@ -351,6 +351,11 @@ flake_overrides = {
 }
 
 
+# dates for which the cran mirror consistently returns 500
+# so we don't have a packages.gz from that date
+blacklisted_cran_dates = ['2021-11-09']
+
+
 missing_in_packages_gz = {
     "3.13": {
         "IntramiRExploreR": {
@@ -1537,7 +1542,7 @@ inherit(  # start anew.
         # arrow & rsymphony together is about 13 packages that are still missing. 9 arrow, 4 RSymphony
         "arrow": "version mismatch between nixpkgs and cran. Couldn't get it fixed :(",  # todo
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
-        "pbdBASE": "either can't find symbol set_BLACS_APTS_in_R if you pass --enable-blacsexport, or can't find BI_Iam", # and nothing is depending on this package, apperantly, and it has been rehoved from cran in 2021-11-05
+        "pbdBASE": "either can't find symbol set_BLACS_APTS_in_R if you pass --enable-blacsexport, or can't find BI_Iam",  # and nothing is depending on this package, apperantly, and it has been rehoved from cran in 2021-11-05
         # r version mismatches?
         "cn.mops": "Error: object 'values' is not exported by 'namespace:IRanges. TRy after 2021-10-28 (so tomorrow)",
         # proprietary / unsupported by cran_tracker_for_nix
@@ -2909,20 +2914,34 @@ inherit(
 
 inherit(
     native_build_inputs,
-    ("3.14", "2021-11-08"), {},
- [
-	'pbdPROF',
-	'pbdSLAP',
-	'Rhpc',
-	'dynr',
-	'permGPU',
-	'pbdBASE',
-	'mvst',
-	'kmcudaR',
-	'KSgeneral',
-	'JMcmprsk',
-	'BALD',
-	])
+    ("3.14", "2021-11-06"),
+    {},
+    [
+        "pbdPROF",
+        "pbdSLAP",
+        "Rhpc",
+        "dynr",
+        "permGPU",
+        "pbdBASE",
+        "mvst",
+        "kmcudaR",
+        "KSgeneral",
+        "JMcmprsk",
+        "BALD",
+    ],
+)
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-11-09"),
+    {},
+    [
+        "abn",
+        "spate",
+        "CLA",
+        "rGEDI",
+    ],
+)
+
 
 native_build_inputs = inherit_to_dict(native_build_inputs)
 
@@ -3105,6 +3124,7 @@ inherit(
     copy_anyway=True,
 )
 inherit(build_inputs, "3.14", {}, [], copy_anyway=True)
+inherit(build_inputs, ("3.14", "2021-11-09"), {}, ["spate"])
 
 
 build_inputs = inherit_to_dict(build_inputs)
@@ -3284,28 +3304,28 @@ inherit(
     patches,
     "3.0",
     {
-        "affy": [nl("./../patches/affy_1.44.no_bioc_installer.patch")],
-        "gcrma": [nl("./../patches/gcrma_2.38.no_bioc_installer.patch")],
-        "webbioc": [nl("./../patches/webbioc.1.38.0.no_bioc_installer.patch")],
-        "affylmGUI": [nl("./../patches/affylmGUI_1.40.2.no_bioc_installer.patch")],
-        "BayesBridge": [nl("./../patches/BayesBridge.patch")],
-        "BayesLogit": [nl("./../patches/BayesLogit.patch")],
-        "BayesXsrc": [nl("./../patches/BayesXsrc.patch")],
-        "CARramps": [nl("./../patches/CARramps.patch")],
-        "EMCluster": [nl("./../patches/EMCluster.patch")],
-        "gmatrix": [nl("./../patches/gmatrix.patch")],
-        "gputools": [nl("./../patches/gputools.patch")],
-        # "iFes": [nl("./../patches/iFes.patch")],
-        "qtbase": [nl("./../patches/qtbase.patch")],
-        "RAppArmor": [nl("./../patches/RAppArmor.patch")],
-        "rpud": [nl("./../patches/rpud.patch")],
-        "Rserve": [nl("./../patches/Rserve.patch")],
-        "spMC": [nl("./../patches/spMC.patch")],
-        "WideLM": [nl("./../patches/WideLM.patch")],
+        "affy": ["affy_1.44.no_bioc_installer.patch"],
+        "gcrma": ["gcrma_2.38.no_bioc_installer.patch"],
+        "webbioc": ["webbioc.1.38.0.no_bioc_installer.patch"],
+        "affylmGUI": ["affylmGUI_1.40.2.no_bioc_installer.patch"],
+        "BayesBridge": ["BayesBridge.patch"],
+        "BayesLogit": ["BayesLogit.patch"],
+        "BayesXsrc": ["BayesXsrc.patch"],
+        "CARramps": ["CARramps.patch"],
+        "EMCluster": ["EMCluster.patch"],
+        "gmatrix": ["gmatrix.patch"],
+        "gputools": ["gputools.patch"],
+        # "iFes": ["iFes.patch"],
+        "qtbase": ["qtbase.patch"],
+        "RAppArmor": ["RAppArmor.patch"],
+        "rpud": ["rpud.patch"],
+        "Rserve": ["Rserve.patch"],
+        "spMC": ["spMC.patch"],
+        "WideLM": ["WideLM.patch"],
         "SDMTools": [
-            nl("./../patches/SDMTools.patch")
+            "SDMTools.patch"
         ],  # see http://dsludwig.github.io/2019/02/12/building-up-to-something.html
-        "oligoClasses": [nl("./../patches/oligoClasses_1.42.0.patch")],
+        #"oligoClasses": ["oligoClasses_1.42.0.patch"],
     },
 )
 
@@ -3313,7 +3333,7 @@ inherit(
     patches,
     ("3.0", "2015-01-11"),
     {
-        "RMySQL": [nl("./../patches/RMySQL.patch")],
+        "RMySQL": ["RMySQL.patch"],
     },
 )
 
@@ -3322,9 +3342,9 @@ inherit(
     patches,
     "3.1",
     {
-        "qtbase": [nl("./../patches/qtbase.patch")],
-        "RMySQL": [nl("./../patches/RMySQL.patch")],
-        "BayesXsrc": [nl("./../patches/BayesXsrc_2.1-2.patch")],
+        "qtbase": ["qtbase.patch"],
+        "RMySQL": ["RMySQL.patch"],
+        "BayesXsrc": ["BayesXsrc_2.1-2.patch"],
     },
     copy_anyway=True,
 )
@@ -3332,7 +3352,7 @@ inherit(
     patches,
     ("3.1", "2015-05-29"),
     {
-        "qtbase": [nl("./../patches/qtbase_1.0.9.patch")],
+        "qtbase": ["qtbase_1.0.9.patch"],
     },  # bc 3.1
 )
 inherit(patches, ("3.1", "2015-10-01"), {}, ["RMySQL"])
@@ -3341,7 +3361,7 @@ inherit(
     patches,
     "3.2",
     {
-        "qtbase": [nl("./../patches/qtbase_1.0.9.patch")],
+        "qtbase": ["qtbase_1.0.9.patch"],
     },
     copy_anyway=True,
 )
@@ -3351,19 +3371,19 @@ inherit(
     patches,
     "3.5",
     {
-        "redland": [nl("./../patches/redland.patch")],
-        "mongolite": [nl("./../patches/mongolite.patch")],
-        "affylmGUI": [nl("./../patches/affylmGUI_1.50.0.no_bioc_installer.patch")],
-        "qtbase": [nl("./../patches/qtbase_1.0.14.patch")],
-        "tesseract": [nl("./../patches/tesseract_1.4.patch")],
+        "redland": ["redland.patch"],
+        "mongolite": ["mongolite.patch"],
+        "affylmGUI": ["affylmGUI_1.50.0.no_bioc_installer.patch"],
+        "qtbase": ["qtbase_1.0.14.patch"],
+        "tesseract": ["tesseract_1.4.patch"],
         "googleformr": [
-            nl("./../patches/googleformr.patch")
+            "googleformr.patch"
         ],  # must prevent net access during install
         "DeepBlueR": [
-            nl("./../patches/DeepBlueR.patch")
+            "DeepBlueR.patch"
         ],  # must prevent net access during install
         "RKEELjars": [
-            nl("./../patches/RKEELjars.patch")
+            "RKEELjars.patch"
         ],  # must prevent net access during install
     },
     copy_anyway=True,
@@ -3373,7 +3393,7 @@ inherit(
     "3.6",
     {
         "multiMiR": [
-            nl("./../patches/multiMiR.patch")
+            "multiMiR.patch"
         ],  # must prevent net access during install
     },
     copy_anyway=True,
@@ -3382,8 +3402,8 @@ inherit(
     patches,
     "3.7",
     {
-        "tesseract": [nl("./../patches/tesseract.patch")],
-        "nearfar": [nl("./../patches/nearfar.patch")],
+        "tesseract": ["tesseract.patch"],
+        "nearfar": ["nearfar.patch"],
     },
     [
         "EMCluster",
@@ -3406,11 +3426,11 @@ inherit(
     patches,
     "3.10",
     {
-        "Rhdf5lib": [nl("./../patches/Rhdf5lib.patch")],
-        "tesseract": [nl("./../patches/tesseract.patch")],
-        "qtbase": [nl("./../patches/qtbase_1.0.14.patch")],
-        "interactiveDisplay": [nl("./../patches/interactiveDisplay.patch")],
-        "commonsMath": [nl("./../patches/commonsMath.patch")],
+        "Rhdf5lib": ["Rhdf5lib.patch"],
+        "tesseract": ["tesseract.patch"],
+        "qtbase": ["qtbase_1.0.14.patch"],
+        "interactiveDisplay": ["interactiveDisplay.patch"],
+        "commonsMath": ["commonsMath.patch"],
     },
     [
         "BayesLogit",
@@ -3421,8 +3441,8 @@ inherit(
     patches,
     "3.11",
     {
-        "snapcount": [nl("./../patches/snapcount.patch")],
-        "spiR": [nl("./../patches/spiR.patch")],
+        "snapcount": ["snapcount.patch"],
+        "spiR": ["spiR.patch"],
     },
     ["mongolite"],
     copy_anyway=True,
@@ -3432,9 +3452,9 @@ inherit(
     "3.12",
     {
         "rfaRm": [
-            nl("./../patches/rfaRm.patch")
+            "rfaRm.patch"
         ],  # try() around on-load network access
-        "packagefinder": [nl("./../patches/packagefinder.patch")],
+        "packagefinder": ["packagefinder.patch"],
     },
     ["qtbase", "SDMTools"],
     copy_anyway=True,
@@ -3444,19 +3464,19 @@ inherit(
     "3.13",
     {
         "immunotation": [
-            nl("./../patches/immunotation.patch")
+            "immunotation.patch"
         ],  # try() around on-load network access
         "ReactomeContentService4R": [
-            nl("./../patches/ReactomeContentService4R.patch")
+            "ReactomeContentService4R.patch"
         ],  # try() around on-load network access
-        "iriR": [nl("./../patches/iriR.patch")],  # try() around on-load network access
+        "iriR": ["iriR.patch"],  # try() around on-load network access
         "waddR": [
-            nl("./../patches/waddR.patch")
+            "waddR.patch"
         ],  # try() around on-load network access
         "nfl4th": [
-            nl("./../patches/nfl4th.patch")
+            "nfl4th.patch"
         ],  # try() around on-load network access
-        "tesseract": [nl("./../patches/tesseract_4.1.2.patch")],
+        "tesseract": ["tesseract_4.1.2.patch"],
     },
     [],
     copy_anyway=True,
@@ -3465,15 +3485,16 @@ inherit(
     patches,
     "3.14",
     {
-        "robis": [nl("./../patches/robis.patch")],
-        "SCATEData": [nl("./../patches/SCATEData.patch")],
-        "x13binary": [nl("./../patches/x13binary_1.57.patch")],
-        "signatureSearch": [nl("./../patches/signatureSearch.patch")],
-        "valse": [nl("./../patches/valse.patch")],
+        "robis": ["robis.patch"],
+        "SCATEData": ["SCATEData.patch"],
+        "x13binary": ["x13binary_1.57.patch"],
+        "signatureSearch": ["signatureSearch.patch"],
+        "valse": ["valse.patch"],
     },
     [],
     copy_anyway=True,
 )
+inherit(patches, ("3.14", "2021-11-09"), {}, ["nearfar"])
 # inherit(
 # patches,
 # ("3.1", "2015-10-01"),
@@ -4119,6 +4140,9 @@ sha256 = "0lpn41lvj4k38ld1w2v9q99gm4bs35ja2zygrndax12rk2a6qjf4";
     ["freetypeharfbuzz", "collapse"],
     copy_anyway=True,
 )
+
+inherit(attrs, ("3.14", "2021-11-09"), {}, ["BALD", "rGEDI"])
+
 
 attrs = inherit_to_dict(attrs)
 
