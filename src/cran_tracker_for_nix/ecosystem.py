@@ -942,15 +942,23 @@ class REcoSystemDumper:
                             all_the_packages.add(p[1])
             (output_path / "packages").mkdir(exist_ok=True)
 
-            def copy(output_filename):
-                input_fn = flake_auxillaries_path / "packages" / output_filename.name
-                shutil.copy(input_fn, output_filename)
+            def copy(output_filenames):
+                for of in output_filenames:
+                    input_fn = flake_auxillaries_path / "packages" / of.name
+                    shutil.copy(input_fn, of)
 
             self.package_job = []
             for p in all_the_packages:
-                j = ppg2.FileGeneratingJob(
-                    output_path / "packages" / (p + ".nix"), copy
-                ).depends_on_file(flake_auxillaries_path / "packages" / (p + ".nix"))
+                inputs = [x.relative_to(Path('.').absolute()) for x in (flake_auxillaries_path / "packages").glob(p + "*")]
+                if not inputs:
+                    raise ValueError('CRAN_TRACK_PACKAGE, but no files found', p)
+                if not any((x.name == p + '.nix' for x in inputs)):
+                    raise ValueError(f"{p}.nix requested by CRAN_TRACK_PACKAGE not found in flake_auxillaries_path / packages")
+                j = ppg2.MultiFileGeneratingJob(
+                    [output_path / "packages" / (p.name) for p in inputs], copy
+                )
+                for i in inputs:
+                    j.depends_on_file(i)
                 self.package_job.append(j)
 
         return ppg2.JobGeneratingJob(

@@ -1540,7 +1540,6 @@ inherit(  # start anew.
     {
         # actual build failures / things we might be able to fix
         # arrow & rsymphony together is about 13 packages that are still missing. 9 arrow, 4 RSymphony
-        "arrow": "version mismatch between nixpkgs and cran. Couldn't get it fixed :(",  # todo
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
         "pbdBASE": "either can't find symbol set_BLACS_APTS_in_R if you pass --enable-blacsexport, or can't find BI_Iam",  # and nothing is depending on this package, apperantly, and it has been rehoved from cran in 2021-11-05
         # r version mismatches?
@@ -2878,7 +2877,7 @@ inherit(
     "3.14",
     {
         "archive": ["pkgconfig", "libarchive"],
-        "arrow": ["cmake", "arrow-cpp"],
+        "arrow": ["cmake", cran_track_package("arrow-cpp_5.0.0")],
         "cartogramR": ["fftw"],
         "GPBayes": ["gsl_1"],
         "h2o": ["jdk"],
@@ -4105,6 +4104,7 @@ inherit(
         "NxtIRFcore": shebangs,
         "paxtoolsr": fake_home,
         "MatchIt": fix_strip,
+        "pins": fake_home,
         "terra": {
             "PROJ_LIB": "${pkgs.proj}/share/proj",
             # "configureFlags": ["--with-proj-share=${pkgs.proj}/share/proj"],
