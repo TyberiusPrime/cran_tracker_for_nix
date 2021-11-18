@@ -462,5 +462,5 @@ def nix_pretty_print(raw):
     if p.returncode == 0:
         return stdout.decode('utf-8')
     else:
-        raise ValueError('nix pretty print error return', p.returncode, stderr)
+        #raise ValueError('nix pretty print error return', p.returncode, stderr)
         return raw

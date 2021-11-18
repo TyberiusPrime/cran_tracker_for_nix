@@ -1836,8 +1836,9 @@ for k, v in additional_r_dependencies.items():
                 raise ValueError(f"entry for {k3} was not a list {v3}")
 
 
-def cran_track_package(name, overrides=''):
+def cran_track_package(name, overrides=""):
     return ("CRAN_TRACK_PACKAGE", name, overrides)
+
 
 native_build_inputs = []  # ie. compile time dependencies
 # pkgs. get's added automatically if there's no . in the entry.
@@ -2907,7 +2908,19 @@ inherit(
     ],
     copy_anyway=True,
 )
-
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-10-28"),
+    {
+        "arrow": [
+            "cmake",
+            cran_track_package(
+                "arrow-cpp_6.0.0",
+            ),
+        ],
+    },
+    [],
+)
 inherit(
     native_build_inputs,
     ("3.14", "2021-11-06"),
@@ -3321,7 +3334,7 @@ inherit(
         "SDMTools": [
             "SDMTools.patch"
         ],  # see http://dsludwig.github.io/2019/02/12/building-up-to-something.html
-        #"oligoClasses": ["oligoClasses_1.42.0.patch"],
+        # "oligoClasses": ["oligoClasses_1.42.0.patch"],
     },
 )
 
@@ -3372,15 +3385,9 @@ inherit(
         "affylmGUI": ["affylmGUI_1.50.0.no_bioc_installer.patch"],
         "qtbase": ["qtbase_1.0.14.patch"],
         "tesseract": ["tesseract_1.4.patch"],
-        "googleformr": [
-            "googleformr.patch"
-        ],  # must prevent net access during install
-        "DeepBlueR": [
-            "DeepBlueR.patch"
-        ],  # must prevent net access during install
-        "RKEELjars": [
-            "RKEELjars.patch"
-        ],  # must prevent net access during install
+        "googleformr": ["googleformr.patch"],  # must prevent net access during install
+        "DeepBlueR": ["DeepBlueR.patch"],  # must prevent net access during install
+        "RKEELjars": ["RKEELjars.patch"],  # must prevent net access during install
     },
     copy_anyway=True,
 )
@@ -3388,9 +3395,7 @@ inherit(
     patches,
     "3.6",
     {
-        "multiMiR": [
-            "multiMiR.patch"
-        ],  # must prevent net access during install
+        "multiMiR": ["multiMiR.patch"],  # must prevent net access during install
     },
     copy_anyway=True,
 )
@@ -3447,9 +3452,7 @@ inherit(
     patches,
     "3.12",
     {
-        "rfaRm": [
-            "rfaRm.patch"
-        ],  # try() around on-load network access
+        "rfaRm": ["rfaRm.patch"],  # try() around on-load network access
         "packagefinder": ["packagefinder.patch"],
     },
     ["qtbase", "SDMTools"],
@@ -3459,19 +3462,13 @@ inherit(
     patches,
     "3.13",
     {
-        "immunotation": [
-            "immunotation.patch"
-        ],  # try() around on-load network access
+        "immunotation": ["immunotation.patch"],  # try() around on-load network access
         "ReactomeContentService4R": [
             "ReactomeContentService4R.patch"
         ],  # try() around on-load network access
         "iriR": ["iriR.patch"],  # try() around on-load network access
-        "waddR": [
-            "waddR.patch"
-        ],  # try() around on-load network access
-        "nfl4th": [
-            "nfl4th.patch"
-        ],  # try() around on-load network access
+        "waddR": ["waddR.patch"],  # try() around on-load network access
+        "nfl4th": ["nfl4th.patch"],  # try() around on-load network access
         "tesseract": ["tesseract_4.1.2.patch"],
     },
     [],

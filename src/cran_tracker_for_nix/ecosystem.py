@@ -997,8 +997,8 @@ class REcoSystemDumper:
                 for p in info[key]:
                     if isinstance(p, tuple) and p[0] == "CRAN_TRACK_PACKAGE":
                         n = f"(pkgs.callPackage ./../packages/{p[1]}.nix {{}})"
-                        if p[2]:  # overrideAttr
-                            n += f".overrideAttr ({p[2]})"
+                        if p[2]:  # overrideAttrs
+                            n = "(" + n + f".overrideAttrs ({p[2]}))"
                         o.append(nix_literal(n))
                     else:
                         o.append(p)
