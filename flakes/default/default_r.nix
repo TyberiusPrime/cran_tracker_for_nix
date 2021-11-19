@@ -1,6 +1,6 @@
 # This file defines the composition for CRAN (R) packages.
 
-{ R, pkgs, overrides, breakpointHook, importCargo }:
+{ R, pkgs, overrides, breakpointHook, importCargo, system }:
 
 let
   inherit (pkgs) fetchurl stdenv lib;
@@ -143,6 +143,7 @@ let
     inherit breakpointHook;
     derive = deriveBiocExp;
   } // import ./generated/cran-packages.nix {
+    inherit system;
     inherit stdenv;
     inherit self;
     inherit lib;

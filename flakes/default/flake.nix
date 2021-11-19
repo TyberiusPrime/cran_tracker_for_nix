@@ -54,6 +54,7 @@
           inherit overrides;
           inherit breakpointHook;
           inherit importCargo;
+          inherit system;
         };
         lib = pkgs.lib;
         rWrapper = pkgs.callPackage ./wrapper.nix {

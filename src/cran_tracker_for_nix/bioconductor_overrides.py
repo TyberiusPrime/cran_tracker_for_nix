@@ -1557,6 +1557,11 @@ inherit(  # start anew.
 inherit(
     broken_packages, ("3.14", "2021-10-28"), {}, ["cn.mops"]
 )  # is IRanges new enough now
+inherit(
+    broken_packages, ("3.14", "2021-11-05"), {}, ["pbdBASE" #  removed from cran, no longer need ot exclude it
+        ]
+)  # is IRanges new enough now
+
 
 broken_packages = inherit_to_dict(broken_packages)
 
@@ -1836,8 +1841,8 @@ for k, v in additional_r_dependencies.items():
                 raise ValueError(f"entry for {k3} was not a list {v3}")
 
 
-def cran_track_package(name, overrides=""):
-    return ("CRAN_TRACK_PACKAGE", name, overrides)
+def cran_track_package(name, full_spec=""):
+    return ("CRAN_TRACK_PACKAGE", name, full_spec)
 
 
 native_build_inputs = []  # ie. compile time dependencies
@@ -2916,11 +2921,17 @@ inherit(
             "cmake",
             cran_track_package(
                 "arrow-cpp_6.0.0",
+                """
+                (
+                  pkgs.callPackage ./../packages/arrow-cpp_6.0.0.nix {}
+                )
+                """,
             ),
         ],
     },
     [],
 )
+
 inherit(
     native_build_inputs,
     ("3.14", "2021-11-06"),
@@ -2937,6 +2948,9 @@ inherit(
         "KSgeneral",
         "JMcmprsk",
         "BALD",
+        "spate",
+        "CLA",
+        "rGEDI",
     ],
 )
 inherit(
@@ -2945,9 +2959,15 @@ inherit(
     {},
     [
         "abn",
-        "spate",
-        "CLA",
-        "rGEDI",
+    ],
+)
+
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-11-17"),
+    {},
+    [
+        "bnpmr",
     ],
 )
 
@@ -3487,7 +3507,7 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(patches, ("3.14", "2021-11-09"), {}, ["nearfar"])
+inherit(patches, ("3.14", "2021-11-08"), {}, ["nearfar"])
 # inherit(
 # patches,
 # ("3.1", "2015-10-01"),
@@ -4135,7 +4155,7 @@ sha256 = "0lpn41lvj4k38ld1w2v9q99gm4bs35ja2zygrndax12rk2a6qjf4";
     copy_anyway=True,
 )
 
-inherit(attrs, ("3.14", "2021-11-09"), {}, ["BALD", "rGEDI"])
+inherit(attrs, ("3.14", "2021-11-06"), {}, ["BALD", "rGEDI"])
 
 
 attrs = inherit_to_dict(attrs)

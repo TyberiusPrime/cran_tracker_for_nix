@@ -944,6 +944,7 @@ class REcoSystemDumper:
 
             def copy(output_filenames):
                 for of in output_filenames:
+                    (flake_auxillaries_path / "packages").mkdir(exist_ok=True)
                     input_fn = flake_auxillaries_path / "packages" / of.name
                     shutil.copy(input_fn, of)
 
@@ -996,9 +997,11 @@ class REcoSystemDumper:
                 o = []
                 for p in info[key]:
                     if isinstance(p, tuple) and p[0] == "CRAN_TRACK_PACKAGE":
-                        n = f"(pkgs.callPackage ./../packages/{p[1]}.nix {{}})"
                         if p[2]:  # overrideAttrs
-                            n = "(" + n + f".overrideAttrs ({p[2]}))"
+                            #n = "(" + n + f".overrideAttrs ({p[2]}))"
+                            n = p[2]
+                        else:
+                            n = f"(pkgs.callPackage ./../packages/{p[1]}.nix {{}})"
                         o.append(nix_literal(n))
                     else:
                         o.append(p)
@@ -1042,7 +1045,7 @@ class REcoSystemDumper:
                     )
                 )
                 op.write(
-                    "\n{ self, derive, pkgs, breakpointHook, lib, stdenv, importCargo }:\n"
+                    "\n{ self, derive, pkgs, breakpointHook, lib, stdenv, importCargo, system }:\n"
                 )
                 # we use the most common snapshot to save some byte here
                 snapshot_counts = collections.Counter()
