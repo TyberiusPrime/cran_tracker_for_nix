@@ -828,7 +828,7 @@ class REcoSystemDumper:
             input = (output_path / "flake.nix").read_text()
             print(flake_info)
             patches = flake_info.get("patches", [])
-            patches = " ".join(patches)
+            str_patches = " ".join(patches)
             output = (
                 input.replace(
                     "github:TyberiusPrime/nixpkgs?rev=f0d6591d9c219254ff2ecd2aa4e5d22459b8cd1c",
@@ -843,13 +843,17 @@ class REcoSystemDumper:
                     ),
                 )
                 .replace(
-                    "patches = []; # R_patches-generated",
-                    "patches = [" + patches + "]; # R_patches-generated",
+                    "patches = [ ]; # R_patches-generated",
+                    "patches = [" + str_patches + "]; # R_patches-generated",
                 )
                 .replace(
                     "#additionalOverrides\n", flake_info.get("additionalOverrides", "")
                 )
             )
+            for p in patches:
+                if p not in output:
+                    print(output)
+                    raise ValueError('missing', p)
             output = common.nix_pretty_print(output)
             (output_files[0]).write_text(output)
             (output_path / "generated").mkdir(exist_ok=True)
