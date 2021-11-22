@@ -358,7 +358,7 @@ missing_in_packages_gz = {
             "imports": ["igraph", "FGNet", "knitr"],
             "linking_to": [],
             "suggests": [
-                "RDAVIDWebService",
+                # "RDAVIDWebService",
                 "gProfileR",
                 "topGO",
                 "org.Dm.eg.db",
@@ -457,8 +457,18 @@ inherit(
         "metagenomeFeatures": "deprecated, but still in PACKAGES.gz",
         "cran--interacCircos": "newer in bioconductor",
         "cran--RCSL": "newer in bioconductor",
+        "synapter": "no source package / build error according to bioconductor",
+        "RDAVIDWebService": "deprecated, but still in PACKAGES.gz",
+        "bigmemoryExtras": "deprecated, but still in PACKAGES.gz",
+        "ggfun": "show up on 2021-07-02",
+        "genoset": "deprecated, but still in PACKAGES.gz",
+        "destiny": "no source package / build error according to bioconductor",
+        "yulab.utils": "show up on 2021-08-17",
     },
 )
+inherit(excluded_packages, ("3.13", "2021-07-02"), {}, ["ggfun"])
+inherit(excluded_packages, ("3.13", "2021-08-17"), {}, ["yulab.utils"])
+
 inherit(
     excluded_packages,
     "3.14",
@@ -1487,7 +1497,6 @@ inherit(  # start anew.
     ("3.13"),  # 2021-05-20
     {
         "affyPara": "error: cannot add binding of '.affyParaInternalEnv' to the base environment",
-        "bigmemoryExtras": "deprecated, but still in PACKAGES.gz",
         "bitmexr": "please check your internet connection. 'Crypto'. Please destroy another planet, ktxbye.",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
         "cbpManager": "Error in loadNamespace(x) : there is no package called 'markdown'",
@@ -1499,8 +1508,6 @@ inherit(  # start anew.
         "proj4": "configure: error: libproj and/or proj.h/proj_api.h not found in standard search locations.",  # todo
         "ChemmineOB": "  configure: error: libproj and/or proj.h/proj_api.h not found in standard search locations.",  # todo,
         "imcdatasets": 'path[1]="/homeless-shelter/.cache/R/BiocFileCache": No such file or directory',
-        "genoset": "deprecated, but still in PACKAGES.gz",
-        "ggfun": "show up on 2021-07-02",
         "IDSpatialStats": "Error: object 'bounding.box.xy' is not exported by 'namespace:spatstat' (apperantly needs spatstat <2.0)",
         "kazaam": "mpi trouble",
         "kmcudaR": "build is broken, needs nvcc",
@@ -1509,7 +1516,6 @@ inherit(  # start anew.
         "pbdSLAP": "mpi trouble",
         "Rblpapi": "blpapi is bloomberg professional API - unfree, not in nixpkgs",
         "Rcplex": "unfree. Cplex not in nixpkgs",
-        "RDAVIDWebService": "deprecated, but still in PACKAGES.gz",
         "Rmpi": "undefined symbol: mpi_universe_size?",  # todo : figure out and fix
         "ROracle": "unfree. Oracle OCI not in nixpkgs",
         "rpanel": "build broken, [tcl] can't find package BWidget.",
@@ -1520,14 +1526,11 @@ inherit(  # start anew.
         "spANOVA": "Error: object 'anova.sarlm' is not exported by 'namespace:spatialreg'",
         "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
         "terra": "ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db",  # tod: probably fixable
-        "yulab.utils": "show up on 2021-08-17",
         "AntMAN": "disappars from packages.gz, presumably because sdols is no longer present after 2021-03-30. There is an update on 2021-07-23, try after that date",
     },
 )
 
-inherit(broken_packages, ("3.13", "2021-07-02"), {}, ["ggfun"])
 inherit(broken_packages, ("3.13", "2021-07-23"), {}, ["AntMAN"])
-inherit(broken_packages, ("3.13", "2021-08-17"), {}, ["yulab.utils"])
 inherit(  # start anew.
     broken_packages,
     ("3.14"),  # 2021-10-27
@@ -1555,12 +1558,30 @@ inherit(  # start anew.
     },
 )
 inherit(
-    broken_packages, ("3.14", "2021-10-28"), {}, ["cn.mops"]
-)  # is IRanges new enough now
+    broken_packages,
+    ("3.14", "2021-10-28"),
+    {},
+    ["cn.mops"],  # is IRanges new enough now
+)
 inherit(
-    broken_packages, ("3.14", "2021-11-05"), {}, ["pbdBASE" #  removed from cran, no longer need ot exclude it
-        ]
-)  # is IRanges new enough now
+    broken_packages,
+    ("3.14", "2021-11-05"),
+    {},
+    ["pbdBASE"],  #  removed from cran, no longer need to exclude it
+)  #
+inherit(
+    broken_packages,
+    ("3.14", "2021-11-06"),
+    {},
+    ["kmcudaR", "permGPU"],  #  removed from cran, no longer need to exclude it
+)
+inherit(
+    broken_packages,
+    ("3.14", "2021-11-08"),
+    {
+        "DEScan2": "object 'collapse' is not exported by 'namespace:glue'"
+    },  # no new release until 2021-11-20 (could possibly be patched, seems to be renamed glue_collapse)
+)
 
 
 broken_packages = inherit_to_dict(broken_packages)
@@ -1818,6 +1839,7 @@ additional_r_dependencies = {
             "qmix": ["rstantools"],
             "red": ["codetools"],
             "valse": ["RcppGSL"],
+            "oolong": ["mlapi", "text2vec"],  # starting 2021-11-12
         },
         "software": {
             "MicrobiotaProcess": [
@@ -2931,12 +2953,28 @@ inherit(
     },
     [],
 )
-
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-11-04"),
+    {
+        "IP": ["libidn"],
+    },
+    ["CLA"],
+)
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-11-05"),
+    {
+        "cuda.ml": ["which"],
+    },
+    [],
+)
 inherit(
     native_build_inputs,
     ("3.14", "2021-11-06"),
     {},
     [
+        "abn",
         "pbdPROF",
         "pbdSLAP",
         "Rhpc",
@@ -2949,17 +2987,18 @@ inherit(
         "JMcmprsk",
         "BALD",
         "spate",
-        "CLA",
         "rGEDI",
     ],
 )
 inherit(
     native_build_inputs,
-    ("3.14", "2021-11-09"),
-    {},
-    [
-        "abn",
-    ],
+    ("3.14", "2021-11-08"),
+    {"dynr": ["gsl_1"]},
+)
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-11-12"),
+    {"agtboost": ["binutils"]},
 )
 
 inherit(
@@ -2968,9 +3007,18 @@ inherit(
     {},
     [
         "bnpmr",
+        "kgrams",
     ],
 )
 
+inherit(
+    native_build_inputs,
+    ("3.14", "2021-11-18"),
+    {},
+    [
+        "IP",
+    ],
+)
 
 native_build_inputs = inherit_to_dict(native_build_inputs)
 
@@ -3153,7 +3201,7 @@ inherit(
     copy_anyway=True,
 )
 inherit(build_inputs, "3.14", {}, [], copy_anyway=True)
-inherit(build_inputs, ("3.14", "2021-11-09"), {}, ["spate"])
+inherit(build_inputs, ("3.14", "2021-11-06"), {}, ["spate"])
 
 
 build_inputs = inherit_to_dict(build_inputs)
@@ -3508,12 +3556,16 @@ inherit(
     copy_anyway=True,
 )
 inherit(patches, ("3.14", "2021-11-08"), {}, ["nearfar"])
-# inherit(
-# patches,
-# ("3.1", "2015-10-01"),
-# {},
-# [],
-# )
+inherit(
+    patches,
+    ("3.14", "2021-11-18"),
+    {
+        "RKEELjars": [
+            "RKEELjars_1.0.20.patch"
+        ],  # must prevent net access during install
+    },
+)
+
 
 patches = inherit_to_dict(patches)
 
@@ -4104,7 +4156,7 @@ inherit(
             "RGL_USE_NULL": "true",  # otherwise test-loading the installed package fails
         },
     },
-    ["rpg"],
+    ["rpg", 'caviarpd'],
     copy_anyway=True,
 )
 inherit(
@@ -4154,8 +4206,29 @@ sha256 = "0lpn41lvj4k38ld1w2v9q99gm4bs35ja2zygrndax12rk2a6qjf4";
     ["freetypeharfbuzz", "collapse"],
     copy_anyway=True,
 )
-
+inherit(
+    attrs,
+    ("3.14", "2021-10-30"),
+    {
+        "fixest->": fake_home,
+    },
+)
+inherit(
+    attrs,
+    ("3.14", "2021-11-05"),
+    {
+        "cuda.ml": shebangs,
+    },
+)
 inherit(attrs, ("3.14", "2021-11-06"), {}, ["BALD", "rGEDI"])
+inherit(
+    attrs,
+    ("3.14", "2021-11-12"),
+    {
+        "agtboost": fix_strip,
+    },
+)
+inherit(attrs, ("3.14", "2021-11-17"), {}, ["kgrams"])
 
 
 attrs = inherit_to_dict(attrs)

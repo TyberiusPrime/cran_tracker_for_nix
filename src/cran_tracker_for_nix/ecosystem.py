@@ -493,11 +493,11 @@ class REcoSystemDumper:
                     }
                 )
 
-                commit(
-                    ["."],
-                    output_path,
-                    final,
-                )
+                #commit(
+                    #["."],
+                    #output_path,
+                    #final,
+                #)
                 of.write_text("final")
 
             ppg2.FileGeneratingJob(output_path / "final_done", mark_done).depends_on(
