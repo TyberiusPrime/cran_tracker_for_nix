@@ -1170,7 +1170,7 @@ class REcoSystemDumper:
             "--verbose",
             "--max-jobs",
             # "auto",
-            str(int(math.ceil(ppg2.util.CPUs() * 1))),
+            str(int(math.ceil(ppg2.util.CPUs() * 1)-4)),
             # "1",
             "--cores",
             "4",  # it's pretty bad at using the cores either way, so let's oversubscribe ab it...

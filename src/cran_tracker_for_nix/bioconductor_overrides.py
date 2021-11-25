@@ -1499,20 +1499,21 @@ inherit(  # start anew.
         "affyPara": "error: cannot add binding of '.affyParaInternalEnv' to the base environment",
         "bitmexr": "please check your internet connection. 'Crypto'. Please destroy another planet, ktxbye.",
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
-        "cbpManager": "Error in loadNamespace(x) : there is no package called 'markdown'",
-        "dmdScheme": "cannot open URL 'https://github.com/Exp-Micro-Ecol-Hub/dmdSchemeRepository/raw/master/schemes/dmdScheme_0.9.9.tar.gz'",
         "expp": "object 'ripras' is not exported by 'namespace:spatstat' (apperantly needs spatstat <2.0)",
-        "freetypeharfbuzz": "Downloads from github",
         "permGPU": "needs nvcc",
         "gpuMagic": "needs opencl",
-        "proj4": "configure: error: libproj and/or proj.h/proj_api.h not found in standard search locations.",  # todo
-        "ChemmineOB": "  configure: error: libproj and/or proj.h/proj_api.h not found in standard search locations.",  # todo,
+        "salso": "needs rust 1.49. Try after 2021-05-31 ",
+        # "cbpManager": "Error in loadNamespace(x) : there is no package called 'markdown'",
+        # "dmdScheme": "cannot open URL 'https://github.com/Exp-Micro-Ecol-Hub/dmdSchemeRepository/raw/master/schemes/dmdScheme_0.9.9.tar.gz'",
+        "freetypeharfbuzz": "Downloads from github",
+        "proj4": "configure: error: libproj and/or proj.h/proj_api.h not found in standard search locations. Try again after 2021-05-31",  # todo
+        "ChemmineOB": "needs openbabel, only present in nixpkgs 21.05, try after 2021-05-31",  # todo,
         "imcdatasets": 'path[1]="/homeless-shelter/.cache/R/BiocFileCache": No such file or directory',
         "IDSpatialStats": "Error: object 'bounding.box.xy' is not exported by 'namespace:spatstat' (apperantly needs spatstat <2.0)",
         "kazaam": "mpi trouble",
         "kmcudaR": "build is broken, needs nvcc",
         "mlbstatsR": "Could not resolve host: site.api.espn.com",
-        "PANTHER.db": "Directory of lock file does not exist: '/homeless-shelter/.cache/R/AnnotationHub'",
+        # "PANTHER.db": "Directory of lock file does not exist: '/homeless-shelter/.cache/R/AnnotationHub'",
         "pbdSLAP": "mpi trouble",
         "Rblpapi": "blpapi is bloomberg professional API - unfree, not in nixpkgs",
         "Rcplex": "unfree. Cplex not in nixpkgs",
@@ -1527,9 +1528,26 @@ inherit(  # start anew.
         "switchr": "R package managment (not necessary on Nix). Cannot open the connection to 'http://bioconductor.org/config.yaml'",
         "terra": "ERROR 1: PROJ: proj_create_from_database: Cannot find proj.db",  # tod: probably fixable
         "AntMAN": "disappars from packages.gz, presumably because sdols is no longer present after 2021-03-30. There is an update on 2021-07-23, try after that date",
+        "rLiDAR": ": object 'disc' is not exported by 'namespace:spatstat'",
+        "h2o": "tries to mkdir dbuild/h2o/inst/java even when we already fetched it's jars using nix. Try to patch?",
     },
 )
 
+inherit(
+    broken_packages,
+    ("3.13", "2021-05-28"),
+    {
+        "GeneTonic": "Error: object 'bs4TabPanel' is not exported by 'namespace:bs4Dash', try after 2021-06-07"
+    },
+    [],
+)
+inherit(
+    broken_packages,
+    ("3.13", "2021-05-31"),
+    {"ProbitSpatial": "build failure: Eigen cpp trouble"},
+    ["ChemmineOB", "proj4", "salso"],
+)
+inherit(broken_packages, ("3.13", "2021-06-07"), {}, ["GeneTonic"])
 inherit(broken_packages, ("3.13", "2021-07-23"), {}, ["AntMAN"])
 inherit(  # start anew.
     broken_packages,
@@ -1823,6 +1841,7 @@ additional_r_dependencies = {
                 "PerformanceAnalytics",
             ],
             "martini": ["memoise"],
+            "cbpManager": ["markdown"],
         },
         "cran": {
             "RBesT": ["rstantools"],
@@ -2896,6 +2915,16 @@ inherit(
 
 inherit(
     native_build_inputs,
+    ("3.13", "2021-05-31"),
+    {
+        "proj4": ["proj", "sqlite"],
+        "XLConnect": ["jdk8"],
+        "MSGFplus": ["which", "jdk8"],
+    },
+)
+
+inherit(
+    native_build_inputs,
     "3.14",
     {
         "archive": ["pkgconfig", "libarchive"],
@@ -2905,8 +2934,8 @@ inherit(
         "h2o": ["jdk"],
         "httpuv": ["zlib"],
         "MatchIt": ["binutils"],
-        "MSGFplus": ["which", "jdk8"],
-        "proj4": ["proj", "sqlite"],
+        # "MSGFplus": ["which", "jdk8"],
+        # "proj4": ["proj", "sqlite"],
         "rawrr": ["mono"],
         "rbedrock": ["cmake", "zlib"],
         "strawr": ["curl"],
@@ -3287,23 +3316,31 @@ inherit_list(
     [],
     copy_anyway=True,
 )
-inherit_list(skip_check, "3.13", [], [], copy_anyway=True)
+inherit_list(
+    skip_check,
+    "3.13",
+    [
+        # many (all?) AnnotationHub dependend packages trie to download / write to home during install
+        "GenomicDistributionsData",
+        "TENxVisiumData",
+        "STexampleData",
+        "scpdata",
+        "emtdata",
+        "msigdb",
+        "org.Mxanthus.db",
+        "SCATE",
+        "SingleMoleculeFootprintingData",
+        "PANTHER.db",
+    ],
+    [],
+    copy_anyway=True,
+)
 inherit_list(
     skip_check,
     "3.14",
     [
         # many (all?) AnnotationHub dependend packages trie to download / write to home during install
-        "emtdata",
-        "SCATE",
-        "GenomicDistributionsData",
-        "msigdb",
-        "org.Mxanthus.db",
-        "scpdata",
-        "SingleMoleculeFootprintingData",
-        "STexampleData",
         "MicrobiotaProcess",
-        "TENxVisiumData",
-        "PANTHER.db",
         "nullrangesData",
         "spatialDmelxsim",
         "synaptome.db",
@@ -3530,13 +3567,18 @@ inherit(
     patches,
     "3.13",
     {
-        "immunotation": ["immunotation.patch"],  # try() around on-load network access
+        "immunotation": [
+            "immunotation_1.0.0.patch"
+        ],  # try() around on-load network access
         "ReactomeContentService4R": [
             "ReactomeContentService4R.patch"
         ],  # try() around on-load network access
         "iriR": ["iriR.patch"],  # try() around on-load network access
         "waddR": ["waddR.patch"],  # try() around on-load network access
         "nfl4th": ["nfl4th.patch"],  # try() around on-load network access
+        "GeneBook": ["GeneBook.patch"],  # try() around on-load network access
+        "SCATEData": ["SCATEData.patch"],
+        "dmdScheme": ["dmdScheme.patch"],  # try around on-load network access
         "tesseract": ["tesseract_4.1.2.patch"],
     },
     [],
@@ -3544,15 +3586,23 @@ inherit(
 )
 inherit(
     patches,
+    ("3.13", "2021-05-31"),
+    {
+        "salso": ["salso_0.22.patch"],
+    },
+)
+
+inherit(
+    patches,
     "3.14",
     {
+        "immunotation": ["immunotation.patch"],  # try() around on-load network access
         "robis": ["robis.patch"],
-        "SCATEData": ["SCATEData.patch"],
         "x13binary": ["x13binary_1.57.patch"],
         "signatureSearch": ["signatureSearch.patch"],
         "valse": ["valse.patch"],
     },
-    [],
+    ["GeneBook", "salso"],
     copy_anyway=True,
 )
 inherit(patches, ("3.14", "2021-11-08"), {}, ["nearfar"])
@@ -4068,11 +4118,6 @@ inherit(
             substituteInPlace tools/staticlib.R --replace "Sys.setenv(CARGO_HOME = cargo_home_backup)" ""
             """
         },
-        "salso": {
-            "postPatch": """
-            substituteInPlace tools/cargo.R --replace "env <- c(env, CARGO_HOME=n(cargo_home))" ""
-            """
-        },
         "caviarpd": {
             "postPatch": """
             substituteInPlace tools/cargo.R --replace "env <- c(env, CARGO_HOME=n(cargo_home))" ""
@@ -4118,13 +4163,14 @@ inherit(
     "3.13",
     {
         #
-        "R.cache": fake_home,
-        "TreeTools": fake_home,
+        "R.cache->>": fake_home,
+        # "TreeTools": fake_home,
         "resemble": fix_strip,
         "stockfish": shebangs,
         "strucchangeRcpp": fix_strip,
         "OmnipathR": fake_home,
         "kgrams": fix_strip,
+        "wppi": fake_home,  # OmnipathR downstreab
         "proj4": {
             "PROJ_LIB": "${pkgs.proj.dev}",
         },
@@ -4132,6 +4178,7 @@ inherit(
             "OPEN_BABEL_INCDIR": "${pkgs.openbabel}/include/openbabel3/",
             "preInstall": 'substituteInPlace src/Makevars.in --replace "/usr/local/include/eigen3" "${pkgs.eigen}/include/eigen3"\n',
         },
+        "SCATE": fake_home,
         "waddR": fake_home,
         "fgga": fake_home,
         # "rgl": {
@@ -4155,8 +4202,27 @@ inherit(
         "GPoM.FDLyapu": {  #  2nd level rgl dependency
             "RGL_USE_NULL": "true",  # otherwise test-loading the installed package fails
         },
+        "h2o": {
+            "preInstall": """
+ls /build
+mkdir /build/h2o/inst/java
+cp $jarSource/h2o.jar /build/h2o/inst/java
+""",
+            "jarSource": nix_literal(
+                """pkgs.fetchzip{
+        url="http://h2o-release.s3.amazonaws.com/h2o/rel-zizler/3/h2o-3.32.1.2.zip";
+        sha256="07kkh1px0naq2g0718y1y0khydivsi80v63kdy1frxls1c5ky3kf";
+        }"""
+            ),
+        },
+        # "salso": {
+        #     "postPatch": """
+        #     substituteInPlace tools/staticlib.R --replace '--release' '--release", "--offline'
+        #     echo "patched offline mode"
+        #     """,
+        # },
     },
-    ["rpg", 'caviarpd'],
+    ["rpg", "caviarpd"],
     copy_anyway=True,
 )
 inherit(
@@ -4185,9 +4251,7 @@ cp $jarSource/h2o.jar /build/h2o/inst/java
         }"""
             ),
         },
-        "wppi": fake_home,  # OmnipathR downstreab
         "R.cache->>": fake_home,
-        "SCATE": fake_home,
         "string2path": {
             "postPatch": """
             substituteInPlace src/Makevars.in --replace "--release" "--release --offline"
@@ -4201,6 +4265,11 @@ url = "https://github.com/x13org/x13prebuilt/raw/master/v1.1.57/linux/64/x13asht
 sha256 = "0lpn41lvj4k38ld1w2v9q99gm4bs35ja2zygrndax12rk2a6qjf4";
 }"""
             )
+        },
+        "salso": {
+            "postPatch": """
+            substituteInPlace tools/cargo.R --replace "env <- c(env, CARGO_HOME=n(cargo_home))" ""
+            """
         },
     },
     ["freetypeharfbuzz", "collapse"],

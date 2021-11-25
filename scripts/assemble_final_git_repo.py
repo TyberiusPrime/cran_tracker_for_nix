@@ -1,4 +1,5 @@
 import subprocess
+import json
 from pathlib import Path
 import re
 import bisect
@@ -8,36 +9,53 @@ input_path = Path("r_ecosystem_tracks")
 
 
 def get_branches(repo_path):
-    return [
-        x[2:]
-        for x in (
-            subprocess.check_output(["git", "branch", "--list"], cwd=repo_path)
-            .decode("utf-8")
-            .strip()
-            .split("\n")
-        )
-    ]
+    b = subprocess.check_output(["git", "branch", "--list"], cwd=repo_path).decode(
+        "utf-8"
+    )
+    return [x.replace("*",'').lstrip() for x in (b.strip().split("\n")) if not x.startswith("(")]
+
+
+def get_tags(repo_path):
+    return (
+        subprocess.check_output(["git", "tag", "--list"], cwd=repo_path)
+        .decode("utf-8")
+        .strip()
+        .split("\n")
+    )
 
 
 def checkout(repo_path, tag):
-    print("checkout", tag)
     return subprocess.check_call(["git", "checkout", tag, "-q"], cwd=repo_path)
 
 
+def tag(repo_path, tag):
+    return subprocess.check_call(["git", "tag", tag], cwd=repo_path)
+
+
 def branch(repo_path, tag):
-    print("branch", tag)
-    return subprocess.check_call(["git", "checkout", "-b", tag], cwd=repo_path)
+    print(tag, known_branches)
+    if tag in known_branches:
+        return subprocess.check_call(["git", "checkout", tag], cwd=repo_path)
+    else:
+        return subprocess.check_call(["git", "checkout", "-b", tag], cwd=repo_path)
 
 
 def add_all(repo_path):
-    print("add_all")
     return subprocess.check_call(["git", "add", "--all"], cwd=repo_path)
 
 
 def rsync(source, target):
-    print("rsync", source.name)
+    # print("rsync", source.name)
     subprocess.check_call(
-        ["rsync", str(source) + "/", str(target), "--exclude=.git", "--delete", "-r"]
+        [
+            "rsync",
+            str(source) + "/",
+            str(target),
+            "--exclude=.git",
+            "--exclude=final_done",
+            "--delete",
+            "-r",
+        ]
     )
 
 
@@ -47,10 +65,10 @@ def reset(repo_path):
 
 def changed(repo_path):
     s = subprocess.check_output(["git", "status", "-s"], cwd=repo_path).decode("utf-8")
-    print('changed', repr(s))
+    # print("changed", repr(s))
     if "nothing to commit" in s:
         return False
-    return s != ''
+    return s != ""
 
 
 def git_commit(repo_path, msg):
@@ -67,17 +85,17 @@ if not repo_path.exists():
     subprocess.check_call(["git", "add", ".gitignore"], cwd=repo_path)
     subprocess.check_call(["git", "commit", "-m", "fill_master"], cwd=repo_path)
     subprocess.check_call(["git", "branch", "-m", "master", "main"], cwd=repo_path)
+    subprocess.check_call(["git", "tag", "initial"], cwd=repo_path)
 
-print(get_branches(repo_path))
-known_tags = [x for x in get_branches(repo_path) if starts_with_date(x)]
-print("known tags", known_tags)
+known_tags = [x for x in get_tags(repo_path) if starts_with_date(x)]
+known_branches = sorted([x for x in get_branches(repo_path) if starts_with_date(x)])
 
 for d in sorted(input_path.glob("*")):
     if (
         d.is_dir()
         and starts_with_date(d.name)
         and len(d.name) == 10
-        and (d / "final_done").exists()
+        and (d / "flake" / "final_done").exists()
     ):
         print(d)
         matching_tags = [x for x in known_tags if x.startswith(d.name)]
@@ -85,23 +103,34 @@ for d in sorted(input_path.glob("*")):
             latest = max(matching_tags)
             next = str(int(latest[latest.rfind("_") + 1 :]) + 1)
         else:
-            if len(known_tags) > 1:
-                smaller = [x for x in known_tags if x[:10] < d.name]
-                latest = max(smaller)
-            else:
-                latest = "main"
+            latest = "initial"
+            # if len(known_tags) > 1:
+            #     smaller = [x for x in known_tags if x[:10] < d.name]
+            #     if smaller:
+            #         latest = max(smaller)
+            #     else:
+            #         latest = "main"
+            # else:
+            #     latest = "main"
             next = 1
-        next = d.name + "_" + str(next)
-        print("checkout")
+        full_next = d.name + "_" + str(next)
+        print("checkout", latest)
+        reset(repo_path)
         checkout(repo_path, latest)
+        branch(repo_path, d.name)
         reset(repo_path)
 
         rsync(d / "flake", repo_path)
         add_all(repo_path)
         if changed(repo_path):
-            print("switching to", next)
-            branch(repo_path, next)
-            msg = (d / "final_done").read_text()
-            git_commit(repo_path, d.name)
+            print("switching to", full_next)
+            info = json.loads((d / "flake/header.json").read_text())
+            msg = f"Bioconductor: {info['Bioconductor']}, {info['archive_date']}"
+            if info["is_release_date"]:
+                msg += "(release date)"
+            git_commit(repo_path, msg)
+            tag(repo_path, full_next)
+            if info["is_release_date"]:
+                tag(repo_path, info["Bioconductor"] + "_" + str(next))
         else:
             print("not changed")
