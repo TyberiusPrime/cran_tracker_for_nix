@@ -406,8 +406,7 @@ class BioconductorRelease:
             # we use these mostly in non-archived Bioconductor versions,
             # so it's safe to set archive date = snapshot date.
             # (that statement was a lie, because MRAN might be missing that date)
-            result.add((d, self.find_closest_available_snapshot(d, 
-                available)))
+            result.add((d, self.find_closest_available_snapshot(d, available)))
         return result
 
     def find_closest_archive_date(self, date: datetime.date):
@@ -540,8 +539,11 @@ class BioconductorRelease:
                     result[package]["version"] = v
                     result[package]["archive"] = True
 
-        adr = bioconductor_overrides.additional_r_dependencies.get(
-            self.str_version, {}
+        adr = match_override_keys(
+            bioconductor_overrides.additional_r_dependencies,
+            self.str_version,
+            query_date,
+            release_info=self.release_info,
         ).get(kind, {})
 
         dadr = set(adr.keys()).difference(result.keys())

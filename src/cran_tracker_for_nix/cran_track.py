@@ -489,9 +489,13 @@ class CranTrack:
         package_info = self.package_info
         result = {}
 
-        additional_dependencies = bioconductor_overrides.additional_r_dependencies.get(
-            bioc_str_version, {}
-        ).get("cran", {})
+        additional_dependencies = match_override_keys(
+            bioconductor_overrides.additional_r_dependencies,
+            bioc_str_version,
+            snapshot_date,
+            release_info=False,
+        ).get('cran', {})
+
 
         for (
             name,

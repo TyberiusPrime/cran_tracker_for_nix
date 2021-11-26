@@ -1,4 +1,5 @@
 from .common import parse_date, format_date, nix_literal
+import copy
 
 """Current roadblocks (ie. packages that block 'many' other packages
 (the numbers are 'package instances' blocked and 'unique packages' blocked (by name)
@@ -66,9 +67,12 @@ def match_override_keys(
         Raise an exception if none_ok==False
     or:
         return default()
+
+
+    release_info is used for sanity checking
     """
     if release_info is None:
-        raise ValueError("release_info must be passed")
+        raise ValueError("release_info must be passed (or explicitly set to False)")
     res = _match_override_keys(
         input_dict, version, date, debug, none_ok, default, release_info
     )
@@ -156,58 +160,87 @@ def _get_last(collector, new_key, default, copy_anyway):
     return last
 
 
-def inherit(collector, new_key, new, remove=None, copy_anyway=False, rewriter=None):
-    """
-    Inherit the values from the last entry iff
-        - copy_anway is set
-    or
-        - last_key == new_key[0] or last_key[0] == new_key[0]
-        ie. the bioconductor version matches
+class Inheritor:
+    def __init__(self, mode="dict"):
+        """Collect values in an inherit from previous except if bioconductor changed
+        way"""
+        self.mode = mode
+        self.collector = []
+        if not mode in ("dict", "list", "nested_dicts"):
+            raise ValueError("invalid mode")
 
-    The rewriter get's passed the copied values, not the new ones
+    def inherit(self, new_key, new, remove=None, copy_anyway=False, rewriter=None):
+        """
+        Inherit the values from the last entry iff
+            - copy_anway is set
+        or
+            - last_key == new_key[0] or last_key[0] == new_key[0]
+            ie. the bioconductor version matches
 
-    """
-    assert isinstance(copy_anyway, bool)
-    assert remove is None or isinstance(remove, list)
-    assert isinstance(collector, list)
-    assert isinstance(new_key, (tuple, str))
-    assert isinstance(new, dict)
-    if isinstance(remove, str):
-        raise TypeError("remove must be a list")
+        The rewriter get's passed the copied values, not the new ones
 
-    last = _get_last(collector, new_key, lambda: {}, copy_anyway)
-    out = last.copy()
-    if rewriter is not None:
-        out = rewriter(out)
-    # remove first, fill in then.
-    if remove:
-        remove = set(remove)
-        for k in remove:
-            if not k in out:
-                raise ValueError("unnecessary remove", k)
-        out = {k: v for (k, v) in out.items() if k not in remove}
-    out.update(new)
-    collector.append((new_key, out))
+        For nested dict, remove must be (outer_key, inner_key)
 
+        """
+        assert isinstance(copy_anyway, bool)
+        assert remove is None or isinstance(remove, list)
+        assert isinstance(new_key, (tuple, str))
+        if self.mode == "dict":
+            assert isinstance(new, dict)
+            gen = dict
+        elif self.mode == "nested_dicts":
+            assert isinstance(new, dict)
+            for v in new.values():
+                assert isinstance(v, dict)
+            gen = dict
+        elif self.mode == "list":
+            assert isinstance(new, list)
+            gen = list
+        else:
+            raise NotImplementedError()
+        last = _get_last(self.collector, new_key, gen, copy_anyway)
 
-def inherit_list(collector, new_key, new, remove=None, copy_anyway=False):
-    """Same as inherit, but just for lists"""
-    assert isinstance(copy_anyway, bool)
-    assert remove is None or isinstance(remove, list)
-    assert isinstance(collector, list)
-    assert isinstance(new_key, (tuple, str))
-    assert isinstance(new, list)
-    last = _get_last(collector, new_key, lambda: [], copy_anyway)
-    out = last[:]
-    out = out + new
-    if remove:
-        remove = set(remove)
-        out = [x for x in out if x not in remove]
-    collector.append((new_key, out))
+        out = copy.deepcopy(last)  # necesasry for the nested ones.
+        if rewriter is not None:
+            out = rewriter(out)
+        if remove:
+            if self.mode == "dict":
+                remove = set(remove)
+                for k in remove:
+                    if not k in out:
+                        raise ValueError("unnecessary remove", k)
+                out = {k: v for (k, v) in out.items() if k not in remove}
+            elif self.mode == "nested_dicts":
+                remove = set(remove)
+                for k in remove:
+                    if not k[0] in out:
+                        raise ValueError("unnecessary remove (first level)", k)
+                    if not k[1] in out[k[0]]:
+                        raise ValueError("unnecessary remove (second level)", k)
+                    del out[k[0]][k[1]]
+                    if not out[k[0]]:
+                        del out[k[0]]
+            elif self.mode == "list":
+                remove = set(remove)
+                out = [x for x in out if x not in remove]
+            else:
+                raise NotImplementedError()
+        if self.mode == "dict":
+            out.update(new)
+        elif self.mode == "nested_dicts":
+            for k in new:
+                if not k in out:
+                    out[k] = {}
+                for k2, v in new[k].items():
+                    out[k][k2] = v
+        elif self.mode == 'list':
+            out.extend(new)
+        else:
+            raise NotImplementedError()
+        self.collector.append((new_key, out))
 
-
-def inherit_to_dict(inherited):
-    return {x[0]: x[1] for x in inherited}
+    def to_dict(self):
+        return {x[0]: x[1] for x in self.collector}
 
 
 # all of these follow the following rules for their keys
@@ -382,9 +415,8 @@ missing_in_packages_gz = {
 # which is necessary when a package is in multiple but we don't want to kick all of them.
 # not to be confused with broken packgaes, which simply don't build..p.
 
-excluded_packages = []
-inherit(
-    excluded_packages,
+excluded_packages = Inheritor("dict")
+excluded_packages.inherit(
     "3.0",
     {
         # repository doublettes
@@ -396,24 +428,21 @@ inherit(
         "cran--oposSOM": "newer in bioconductor",
     },
 )
-inherit(
-    excluded_packages,
+excluded_packages.inherit(
     "3.1",
     {
         "cran--saps": "newer in bioconductor",
         "cran--muscle": "newer in bioconductor",
     },
 )
-inherit(excluded_packages, "3.2", {})
-inherit(
-    excluded_packages,
+excluded_packages.inherit("3.2", {})
+excluded_packages.inherit(
     "3.3",
     {
         "bioc_experiment--IHW": "newer in bioconductor-software",
     },
 )
-inherit(
-    excluded_packages,
+excluded_packages.inherit(
     "3.4",
     {
         "cran--PharmacoGx": "newer in bioconductor",
@@ -421,16 +450,14 @@ inherit(
         "cran--synergyfinder": "newer in bioconductor",
     },
 )
-inherit(excluded_packages, "3.5", {})
-inherit(
-    excluded_packages,
+excluded_packages.inherit("3.5", {})
+excluded_packages.inherit(
     "3.6",
     {
         "bioc_software--JASPAR2018": "same package present in annotation",
     },
 )
-inherit(
-    excluded_packages,
+excluded_packages.inherit(
     "3.7",
     {
         "bioc_software--JASPAR2018": "newer package present in annotation",
@@ -439,19 +466,17 @@ inherit(
         "domainsignatures": "deprecated in 3.6, removed in 3.7, but still in PACKAGES",
     },
 )
-inherit(
-    excluded_packages,
+excluded_packages.inherit(
     "3.8",
     {
         "cran--mixOmics": "newer in bioconductor",
     },
 )
-inherit(excluded_packages, "3.9", {})
-inherit(excluded_packages, "3.10", {})
-inherit(excluded_packages, "3.11", {})
-inherit(excluded_packages, "3.12", {})
-inherit(
-    excluded_packages,
+excluded_packages.inherit("3.9", {})
+excluded_packages.inherit("3.10", {})
+excluded_packages.inherit("3.11", {})
+excluded_packages.inherit("3.12", {})
+excluded_packages.inherit(
     "3.13",
     {
         "metagenomeFeatures": "deprecated, but still in PACKAGES.gz",
@@ -466,11 +491,15 @@ inherit(
         "yulab.utils": "show up on 2021-08-17",
     },
 )
-inherit(excluded_packages, ("3.13", "2021-07-02"), {}, ["ggfun"])
-inherit(excluded_packages, ("3.13", "2021-08-17"), {}, ["yulab.utils"])
+excluded_packages.inherit(
+    ("3.13", "2021-06-02"),
+    {"gama": "removed from cran, but 'Clustering' still depends on it"},
+    [],
+)
+excluded_packages.inherit(("3.13", "2021-07-02"), {}, ["ggfun"])
+excluded_packages.inherit(("3.13", "2021-08-17"), {}, ["yulab.utils"])
 
-inherit(
-    excluded_packages,
+excluded_packages.inherit(
     "3.14",
     {
         "synapter": "no source package / build error according to bioconductor",
@@ -480,11 +509,10 @@ inherit(
         "cran--RCSL": "newer in bioconductor",
     },
 )
-excluded_packages = inherit_to_dict(excluded_packages)
+excluded_packages = excluded_packages.to_dict()
 
-broken_packages = []
-inherit(
-    broken_packages,
+broken_packages = Inheritor()
+broken_packages.inherit(
     "3.0",
     {
         # actual excludes
@@ -539,8 +567,7 @@ inherit(
         "XMLSchema": "(omegahat / github only?)",
     },
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.0", "2014-10-26"),
     {
         "metaMix": "R install fails with MPI problem",
@@ -549,21 +576,18 @@ inherit(
     ["bioassayR", "plethy", "cummeRbund", "VariantFiltering"],
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.0", "2014-10-28"),
     {},
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.0", "2014-11-07"),
     {},
     ["HSMMSingleCell"],
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.0", "2015-01-11"),
     {
         "Rsymphony": "can't find SYMPHONY in nixpkgs",
@@ -578,8 +602,7 @@ inherit(
 )
 
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.1"),
     {
         #  simply missing
@@ -641,15 +664,13 @@ inherit(
         #'WideLM': 'ncvv too old (missing option)',
     },
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.1", "2015-04-27"),
     {},
 )
 
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.1", "2015-05-02"),
     {
         "h5": "no hdf5.dev in this nixpkgs",
@@ -657,17 +678,15 @@ inherit(
     [],
 )
 
-inherit(broken_packages, ("3.1", "2015-05-16"), {}, ["bamboo"])
-inherit(broken_packages, ("3.1", "2015-06-09"), {}, ["seqplots"])
-inherit(
-    broken_packages,
+broken_packages.inherit(("3.1", "2015-05-16"), {}, ["bamboo"])
+broken_packages.inherit(("3.1", "2015-06-09"), {}, ["seqplots"])
+broken_packages.inherit(
     ("3.1", "2015-07-02"),
     {
         "iptools": "can't find boost::regex",
     },
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.1", "2015-07-07"),
     {},
     [
@@ -676,15 +695,13 @@ inherit(
         "clipper",
     ],
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.1", "2015-07-15"),
     {},
     ["assertive.base"],
 )
-inherit(broken_packages, ("3.1", "2015-08-01"), {}, ["DT"])
-inherit(
-    broken_packages,
+broken_packages.inherit(("3.1", "2015-08-01"), {}, ["DT"])
+broken_packages.inherit(
     ("3.1", "2015-10-01"),
     {
         "FIACH": "unknown output-sync type 'RTIFY_SOURCE=2'?",
@@ -694,8 +711,7 @@ inherit(
     ["NGScopy"],
 )
 
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(  # start anew.
     ("3.2"),
     {
         # I expect these to stay broken
@@ -750,9 +766,8 @@ inherit(  # start anew.
         #'WideLM': 'ncvv too old (missing option)',
     },
 )
-inherit(broken_packages, ("3.2", "2015-12-29"), {}, ["flowCore"])
-inherit(
-    broken_packages,
+broken_packages.inherit(("3.2", "2015-12-29"), {}, ["flowCore"])
+broken_packages.inherit(
     ("3.2", "2016-01-10"),
     {
         "rjags": "Wrong JAGS version in nixpkgs 15.09",
@@ -760,10 +775,9 @@ inherit(
     },
     ["ggrepel"],
 )
-inherit(broken_packages, ("3.2", "2016-02-08"), {}, ["spliceSites"])
+broken_packages.inherit(("3.2", "2016-02-08"), {}, ["spliceSites"])
 
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(
     ("3.3"),  # 2016-05-04
     {
         "XMLRPC": "(omegahat / github only?)",
@@ -774,8 +788,7 @@ inherit(  # start anew.
     },
 )
 
-inherit(  # start anew.
-    broken_packages,  # 2016-10-18
+broken_packages.inherit(  # start anew.
     ("3.4"),
     {
         "XMLRPC": "(omegahat / github only?)",
@@ -785,8 +798,7 @@ inherit(  # start anew.
         "ChemmineOB": "openbabel is broken in nixpkgs 17.04",
     },
 )
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(
     ("3.5"),  # 2017-04-25
     {
         "AnnotationHub": "missing BiocInstaller - todo: patch?",
@@ -852,28 +864,22 @@ inherit(  # start anew.
         "XMLRPC": "(omegahat / github only?)",
     },
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.5", "2017-04-25"),
     {
         # "INLA": "never on cran",
     },
 )
-inherit(broken_packages, ("3.5", "2017-04-26"), {}, ["plink"])
-inherit(broken_packages, ("3.5", "2017-06-09"), {}, ["dbplyr"])  # or is it -10?
-inherit(
-    broken_packages, ("3.5", "2017-06-19"), {}, ["GenomicFeatures"]
-)  # or is it -10?
-inherit(
-    broken_packages, ("3.5", "2017-06-30"), {}, ["mcPAFit"]
-)  # new release, maybe...
-inherit(
-    broken_packages, ("3.5", "2017-07-30"), {}, ["CountClust"]
+broken_packages.inherit(("3.5", "2017-04-26"), {}, ["plink"])
+broken_packages.inherit(("3.5", "2017-06-09"), {}, ["dbplyr"])  # or is it -10?
+broken_packages.inherit(("3.5", "2017-06-19"), {}, ["GenomicFeatures"])  # or is it -10?
+broken_packages.inherit(("3.5", "2017-06-30"), {}, ["mcPAFit"])  # new release, maybe...
+broken_packages.inherit(
+    ("3.5", "2017-07-30"), {}, ["CountClust"]
 )  # new cowplot release
 
 
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(  # start anew.
     ("3.6"),  # 2017-10-31
     {
         "AnnotationHub": "missing BiocInstaller - todo: patch?",
@@ -939,15 +945,14 @@ inherit(  # start anew.
         "yearn": "needs BiocInstaller",  # todo patch
     },
 )
-inherit(broken_packages, ("3.6", "2017-11-21"), {}, ["bigmemoryExtras"])  # start anew.
-inherit(broken_packages, ("3.6", "2017-11-24"), {}, ["genomation"])  # start anew.
-inherit(  # start anew.
-    broken_packages, ("3.6", "2017-12-18"), {}, ["MutationalPatterns"]
+broken_packages.inherit(("3.6", "2017-11-21"), {}, ["bigmemoryExtras"])  # start anew.
+broken_packages.inherit(("3.6", "2017-11-24"), {}, ["genomation"])  # start anew.
+broken_packages.inherit(  # start anew.
+    ("3.6", "2017-12-18"), {}, ["MutationalPatterns"]
 )
 
 
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(  # start anew.
     ("3.7"),  # 2018-05-1
     {
         #
@@ -1012,46 +1017,39 @@ inherit(  # start anew.
     },
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.7", "2018-05-10"),
     {},
     ["rsunlight"],
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.7", "2018-05-26"),
     {"GenABEL.data": "removed from cran, but still in packages"},
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.7", "2018-07-03"),
     {},
     ["ggtree"],
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.7", "2018-07-10"),
     {},
     ["pathifier"],
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.7", "2018-07-15"),
     {},
     ["ClusterSignificance"],
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.7", "2018-07-16"),
     {"ReporteRsjars": "removed from cran, but still in packages"},
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     "3.8",  # start anew. # 2018-10-31
     {
         "anyLib": "needs BiocInstaller",
@@ -1111,11 +1109,10 @@ inherit(
         "yearn": "needs BiocInstaller",  # todo patch
     },
 )
-inherit(broken_packages, ("3.8", "2018-11-16"), {}, ["GENEAsphere"])
-inherit(broken_packages, ("3.8", "2018-12-22"), {}, ["GEOquery"])
+broken_packages.inherit(("3.8", "2018-11-16"), {}, ["GENEAsphere"])
+broken_packages.inherit(("3.8", "2018-12-22"), {}, ["GEOquery"])
 
-inherit(  # start anew. - 2019-03-05
-    broken_packages,
+broken_packages.inherit(  # start anew. - 2019-03-05
     ("3.9"),
     {
         "ajv": "  ** testing if installed package keeps a record of temporary installation path-> cannot opon the connection?",
@@ -1173,22 +1170,21 @@ inherit(  # start anew. - 2019-03-05
         "x12": "'error: argument is of length zero'?",
     },
 )
-inherit(broken_packages, ("3.9", "2019-05-18"), {}, ["charm"])
+broken_packages.inherit(("3.9", "2019-05-18"), {}, ["charm"])
 
 
-inherit(broken_packages, ("3.9", "2019-06-03"), {}, ["mnlogit"])
+broken_packages.inherit(("3.9", "2019-06-03"), {}, ["mnlogit"])
 
-inherit(broken_packages, ("3.9", "2019-06-17"), {}, ["ImmuneSpaceR"])
-
-
-inherit(broken_packages, ("3.9", "2019-08-22"), {}, ["cola"])
-inherit(broken_packages, ("3.9", "2019-09-12"), {}, ["PrInCE"])
+broken_packages.inherit(("3.9", "2019-06-17"), {}, ["ImmuneSpaceR"])
 
 
-inherit(broken_packages, ("3.9", "2019-10-22"), {}, ["gtrellis"])
+broken_packages.inherit(("3.9", "2019-08-22"), {}, ["cola"])
+broken_packages.inherit(("3.9", "2019-09-12"), {}, ["PrInCE"])
 
-inherit(  # start anew.
-    broken_packages,
+
+broken_packages.inherit(("3.9", "2019-10-22"), {}, ["gtrellis"])
+
+broken_packages.inherit(  # start anew.
     ("3.10"),  # 2019-10-30
     {
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
@@ -1239,19 +1235,18 @@ inherit(  # start anew.
         "mlm4omics": "won't compile with current stan",
     },
 )
-inherit(broken_packages, ("3.10", "2019-11-08"), {}, ["trio"])  # see above for logiRec
-inherit(broken_packages, ("3.10", "2019-11-21"), {}, ["reactable"])
-inherit(broken_packages, ("3.10", "2019-12-30"), {}, [])  # update, might start to work
-inherit(
-    broken_packages, ("3.10", "2020-01-28"), {}, ["plyranges", "BiocPkgTools"]
+broken_packages.inherit(("3.10", "2019-11-08"), {}, ["trio"])  # see above for logiRec
+broken_packages.inherit(("3.10", "2019-11-21"), {}, ["reactable"])
+broken_packages.inherit(("3.10", "2019-12-30"), {}, [])  # update, might start to work
+broken_packages.inherit(
+    ("3.10", "2020-01-28"), {}, ["plyranges", "BiocPkgTools"]
 )  # see above for tidyselect
-inherit(
-    broken_packages, ("3.10", "2020-02-07"), {}, ["splatter"]
+broken_packages.inherit(
+    ("3.10", "2020-02-07"), {}, ["splatter"]
 )  # see above for checkmate
 
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.10", "2020-03-03"),
     {
         "rphast": "removed from CRAN on 2020-03-03, but dependencies were not removed",
@@ -1259,8 +1254,7 @@ inherit(
 )
 
 
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(  # start anew.
     ("3.11"),  # 2020-04-28
     {
         "BRugs": "needs OpenBUGS, not in nixpkgs. Or in ubuntu. And the website change log says it hasn't updated since 2014. And the ssl certificate is expired.",
@@ -1353,8 +1347,7 @@ inherit(  # start anew.
         "human.db0.": "AnnotationDbi 1.49.2 needed. Try 2020-04-28",
     },
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.11", "2020-04-29"),
     {},
     [
@@ -1402,23 +1395,20 @@ inherit(
     ],  # check date
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.11", "2020-05-14"),
     {
         "parcor": "missing ppls",
     },  # check date
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.11", "2020-06-16"),
     {},
     ["rdomains"],  # check date
 )
 
 
-inherit(  # start anew. - 2020-10-28
-    broken_packages,
+broken_packages.inherit(  # start anew. - 2020-10-28
     ("3.12"),
     {
         "BiocPkgTools": "object 'html_text2' is not exported by 'namespace:rvest'",
@@ -1479,21 +1469,19 @@ inherit(  # start anew. - 2020-10-28
         "x12": "'error: argument is of length zero'?",
     },
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.12", "2021-01-16"),
     {},
     ["SeuratObject", "spatstat.geom", "synergyfinder"],
 )
-inherit(broken_packages, ("3.12", "2021-01-17"), {}, ["spsUtil"])
-inherit(broken_packages, ("3.12", "2021-01-23"), {}, ["spatstat.core"])
-inherit(broken_packages, ("3.12", "2021-01-26"), {}, ["spsComps"])
-inherit(broken_packages, ("3.12", "2021-02-11"), {}, ["biocthis"])
-inherit(broken_packages, ("3.12", "2021-03-03"), {}, ["drawer"])
+broken_packages.inherit(("3.12", "2021-01-17"), {}, ["spsUtil"])
+broken_packages.inherit(("3.12", "2021-01-23"), {}, ["spatstat.core"])
+broken_packages.inherit(("3.12", "2021-01-26"), {}, ["spsComps"])
+broken_packages.inherit(("3.12", "2021-02-11"), {}, ["biocthis"])
+broken_packages.inherit(("3.12", "2021-03-03"), {}, ["drawer"])
 
 
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(  # start anew.
     ("3.13"),  # 2021-05-20
     {
         "affyPara": "error: cannot add binding of '.affyParaInternalEnv' to the base environment",
@@ -1533,24 +1521,21 @@ inherit(  # start anew.
     },
 )
 
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.13", "2021-05-28"),
     {
         "GeneTonic": "Error: object 'bs4TabPanel' is not exported by 'namespace:bs4Dash', try after 2021-06-07"
     },
     [],
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.13", "2021-05-31"),
     {"ProbitSpatial": "build failure: Eigen cpp trouble"},
     ["ChemmineOB", "proj4", "salso"],
 )
-inherit(broken_packages, ("3.13", "2021-06-07"), {}, ["GeneTonic"])
-inherit(broken_packages, ("3.13", "2021-07-23"), {}, ["AntMAN"])
-inherit(  # start anew.
-    broken_packages,
+broken_packages.inherit(("3.13", "2021-06-07"), {}, ["GeneTonic"])
+broken_packages.inherit(("3.13", "2021-07-23"), {}, ["AntMAN"])
+broken_packages.inherit(  # start anew.
     ("3.14"),  # 2021-10-27
     {
         # actual build failures / things we might be able to fix
@@ -1575,26 +1560,22 @@ inherit(  # start anew.
         # net access
     },
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.14", "2021-10-28"),
     {},
     ["cn.mops"],  # is IRanges new enough now
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.14", "2021-11-05"),
     {},
     ["pbdBASE"],  #  removed from cran, no longer need to exclude it
 )  #
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.14", "2021-11-06"),
     {},
     ["kmcudaR", "permGPU"],  #  removed from cran, no longer need to exclude it
 )
-inherit(
-    broken_packages,
+broken_packages.inherit(
     ("3.14", "2021-11-08"),
     {
         "DEScan2": "object 'collapse' is not exported by 'namespace:glue'"
@@ -1602,40 +1583,38 @@ inherit(
 )
 
 
-broken_packages = inherit_to_dict(broken_packages)
+broken_packages = broken_packages.to_dict()
 
 # for when a new package can't be used because a dependency hasn't
 # catched up yet, so we want to use an older version of the new package
 # only works for cran packages.
 # these are not bioc version specific, since they're usually pairs
 # of start downgrade / end downgrade.
-downgrades = []
-inherit(downgrades, "-", {})
-inherit(
-    downgrades,
+downgrades = Inheritor()
+downgrades.inherit("-", {})
+downgrades.inherit(
     ("-", "2015-05-28"),
     {"RecordLinkage": "0.4-8"},  # , "Namespace trouble -no table.ff in ffbase",
     [],
 )
 
 
-inherit(
-    downgrades, ("-", "2015-06-05"), {}, ["RecordLinkage"]
+downgrades.inherit(
+    ("-", "2015-06-05"), {}, ["RecordLinkage"]
 )  # ffbase release, RecordLinkage should work again
 
-inherit(
-    downgrades,
+downgrades.inherit(
     ("-", "2016-01-10"),
     {"synchronicity": "1.1.4"},
     [],  # boost trouble
 )
 
-inherit(
-    downgrades, ("-", "2016-02-17"), {}, ["synchronicity"]
+downgrades.inherit(
+    ("-", "2016-02-17"), {}, ["synchronicity"]
 )  # synchronicity release, might work again.
 
 
-downgrades = inherit_to_dict(downgrades)
+downgrades = downgrades.to_dict()
 
 
 package_patches = {
@@ -1699,63 +1678,51 @@ package_patches = {
             },
         ]
     },
-    # "3.0": {
-    #     "annotation": [
-    #         {
-    #             "name": "gahgu133plus2cdf",
-    #             "version": "2.2.1",
-    #             "depends": [
-    #                 "utils",
-    #                 "AnnotationDbi",
-    #             ],  # annotationdbi was missing
-    #             "imports": [],
-    #             "linking_to": [],
-    #             "needs_compilation": False,
-    #         }
-    #     ],
-    #     "software": [
-    #         {
-    #             "name": "inSilicoMerging",
-    #             "version": "1.10.1",
-    #             "depends": [
-    #                 "Biobase",
-    #                 "inSilicoDb",
-    #                 "BiocGenerics",
-    #             ],  # inSilicoDb was missing
-    #             "imports": [],
-    #             "linking_to": [],
-    #             "needs_compilation": False,
-    #         }
-    #     ],
-    # }
 }
 
-additional_r_dependencies = {
+additional_r_dependencies = Inheritor("nested_dicts")
+additional_r_dependencies.inherit(
     # for when dependencies are missing.
     # we need to use this already at low level,
     # so the graph is complete,
     # not only on export
-    "3.0": {
+    "3.0",
+    {
         "annotation": {"gahgu133plus2cdf": ["AnnotationDbi"]},
         "software": {"inSilicoMerging": ["inSilicoDb"]},
     },
-    "3.1": {
+)
+additional_r_dependencies.inherit(
+    "3.1",
+    {
         "software": {"inSilicoMerging": ["inSilicoDb"], "ChemmineR": ["gridExtra"]},
     },
-    "3.2": {
+)
+additional_r_dependencies.inherit(
+    "3.2",
+    {
         "annotation": {"gahgu133plus2cdf": ["AnnotationDbi"]},
         "software": {
             "inSilicoMerging": ["inSilicoDb"],
             # "ChemmineR": ["gridExtra"]
         },
     },
-    "3.9": {
+)
+additional_r_dependencies.inherit(
+    "3.9",
+    {
         "cran": {"zonator": ["codetools"]},
     },
-    "3.10": {
+)
+additional_r_dependencies.inherit(
+    "3.10",
+    {
         "cran": {"RBesT": ["rstantools"]},
     },
-    "3.11": {
+)
+additional_r_dependencies.inherit(
+    "3.11",
+    {
         "software": {
             # these are apperantly all 'bioconductor packages missed some deps that are in DESCRIPTION ???
             "ASICS": ["TSdist"],
@@ -1783,7 +1750,10 @@ additional_r_dependencies = {
             "qmix": ["rstantools"],
         },
     },
-    "3.12": {
+)
+additional_r_dependencies.inherit(
+    "3.12",
+    {
         "cran": {
             "CNVRG": ["rstantools"],
             "RBesT": ["rstantools"],
@@ -1828,7 +1798,10 @@ additional_r_dependencies = {
             "psygenet2r": ["BiocManager"],
         },
     },
-    "3.13": {
+)
+additional_r_dependencies.inherit(
+    "3.13",
+    {
         "software": {
             "BiocPkgTools": ["rex"],
             "artMS": [
@@ -1850,14 +1823,24 @@ additional_r_dependencies = {
             "qmix": ["rstantools"],
         },
     },
-    "3.14": {
+)
+additional_r_dependencies.inherit(
+    ("3.13", "2021-06-02"),
+    {
+        "cran": {
+            "valse": ["RcppGSL"],
+        }
+    },
+)
+additional_r_dependencies.inherit(
+    "3.14",
+    {
         "cran": {
             "BINtools": ["rstantools"],
             "bayesZIB": ["rstantools"],
             "densEstBayes": ["rstantools"],
             "qmix": ["rstantools"],
             "red": ["codetools"],
-            "valse": ["RcppGSL"],
             "oolong": ["mlapi", "text2vec"],  # starting 2021-11-12
         },
         "software": {
@@ -1871,7 +1854,9 @@ additional_r_dependencies = {
             "sangeranalyseR": ["kableExtra"],
         },
     },
-}
+)
+
+additional_r_dependencies = additional_r_dependencies.to_dict()
 
 for k, v in additional_r_dependencies.items():
     for k2, v2 in v.items():
@@ -1886,10 +1871,9 @@ def cran_track_package(name, full_spec=""):
     return ("CRAN_TRACK_PACKAGE", name, full_spec)
 
 
-native_build_inputs = []  # ie. compile time dependencies
+native_build_inputs = Inheritor()  # ie. compile time dependencies
 # pkgs. get's added automatically if there's no . in the entry.
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.0",
     {
         "rhdf5": ["hdf5"],
@@ -2071,10 +2055,9 @@ inherit(
         "XML": ["libtool", "libxml2", "xmlsec", "libxslt"],
     },
 )
-inherit(native_build_inputs, ("3.0", "2014-10-26"), {}, ["vcf2geno"])
-inherit(native_build_inputs, ("3.0", "2014-10-31"), {}, ["STARSEQ"])
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(("3.0", "2014-10-26"), {}, ["vcf2geno"])
+native_build_inputs.inherit(("3.0", "2014-10-31"), {}, ["STARSEQ"])
+native_build_inputs.inherit(
     ("3.0", "2015-01-11"),
     {
         "curl": ["curl"],
@@ -2084,14 +2067,12 @@ inherit(
         "rDEA": ["glpk"],
     },
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.0", "2015-03-09"),
     {},
     ["Rniftilib"],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.1",
     {
         "abn": ["gsl"],
@@ -2116,23 +2097,20 @@ inherit(
     ["npRmpi"],
     copy_anyway=True,
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.1", "2015-04-21"),
     {
         "xml2": ["libxml2"],
     },
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.1", "2015-06-09"),
     {
         "PEIP": ["liblapack", "blas"],
     },
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.1", "2015-07-11"),
     {
         "PythonInR": ["python"],
@@ -2140,9 +2118,8 @@ inherit(
 )
 
 
-inherit(native_build_inputs, ("3.1", "2015-08-31"), {"spatial": ["which"]})  # 7.3.11
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(("3.1", "2015-08-31"), {"spatial": ["which"]})  # 7.3.11
+native_build_inputs.inherit(
     ("3.1", "2015-10-01"),
     {
         "VBmix": ["gsl", "fftw", "qt4", "blas", "liblapack"],
@@ -2154,8 +2131,7 @@ inherit(
     },
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.2",
     {
         "Rsubread": ["zlib"],
@@ -2167,11 +2143,10 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(native_build_inputs, ("3.2", "2015-11-21"), {}, ["CARramps", "rpud"])
+native_build_inputs.inherit(("3.2", "2015-11-21"), {}, ["CARramps", "rpud"])
 
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.2", "2016-01-10"),
     {
         "rmumps": ["cmake"],
@@ -2179,13 +2154,12 @@ inherit(
         "sodium": ["libsodium"],
     },
 )
-inherit(native_build_inputs, ("3.2", "2016-01-11"), {}, ["ncdf"])
+native_build_inputs.inherit(("3.2", "2016-01-11"), {}, ["ncdf"])
 
-inherit(native_build_inputs, "3.3", {}, [], copy_anyway=True)
+native_build_inputs.inherit("3.3", {}, [], copy_anyway=True)
 
-inherit(native_build_inputs, "3.4", {}, ["MMDiff", "SJava"], copy_anyway=True)
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit("3.4", {}, ["MMDiff", "SJava"], copy_anyway=True)
+native_build_inputs.inherit(
     "3.5",
     {
         "devEMF": ["pkgs.xlibs.libXft", "x11"],
@@ -2265,8 +2239,7 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.6",
     {
         "RcppClassic": ["binutils"],
@@ -2317,34 +2290,29 @@ inherit(
     copy_anyway=True,
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.6", "2017-11-03"),
     {},
     ["RcppOctave"],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.6", "2018-01-02"),
     {},
     ["rgpui", "rgp"],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.6", "2018-01-23"),
     {},
     ["sprint"],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.6", "2018-03-05"),
     {},
     ["VBmix"],
 )
 
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.7",
     {
         "KSgeneral": ["pkgconfig", "fftw"],
@@ -2393,22 +2361,19 @@ inherit(
     copy_anyway=True,
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.7", "2018-05-15"),
     {},
     ["RnavGraph"],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.7", "2018-08-05"),
     {},
     ["SOD"],
 )
 
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.8",
     {
         "BALD": ["pkgconfig", "jags", "pcre", "lzma", "bzip2", "zlib", "icu"],
@@ -2446,16 +2411,14 @@ inherit(
     ["flowQ", "rcqp"],
     copy_anyway=True,
 )
-inherit(native_build_inputs, ("3.8", "2018-11-05"), {"lattice": ["which"]})  # 0.20-38
-inherit(native_build_inputs, ("3.8", "2018-12-25"), {"codetools": ["which"]})  # 0.2-16
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(("3.8", "2018-11-05"), {"lattice": ["which"]})  # 0.20-38
+native_build_inputs.inherit(("3.8", "2018-12-25"), {"codetools": ["which"]})  # 0.2-16
+native_build_inputs.inherit(
     ("3.8", "2019-03-03"),
     {},
     ["libamtrack"],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.8", "2019-03-20"),
     {},
     ["pcaPA"],
@@ -2633,8 +2596,7 @@ def rust_inputs(pkg):
     ]
 
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.9",  # 2019-05-03
     {
         "apcf": ["gdal", "geos"],
@@ -2678,8 +2640,7 @@ def handle_renames(lookup):
     return fix
 
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.10",
     {
         "bbl": ["gsl_1"],
@@ -2737,8 +2698,7 @@ inherit(
         }
     ),
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.11",
     {
         "TKF": ["gsl_1"],
@@ -2797,8 +2757,7 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.11", "2020-09-09"),  # wrong date, TODO
     {},
     [
@@ -2808,8 +2767,7 @@ inherit(
     ],
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.12",
     {
         "briskaR": ["binutils"],
@@ -2860,8 +2818,7 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     "3.13",
     {
         "ChemmineOB": ["openbabel3", "pkgconfig", "eigen"],
@@ -2913,8 +2870,7 @@ inherit(
     copy_anyway=True,
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.13", "2021-05-31"),
     {
         "proj4": ["proj", "sqlite"],
@@ -2922,9 +2878,18 @@ inherit(
         "MSGFplus": ["which", "jdk8"],
     },
 )
+native_build_inputs.inherit(
+    ("3.13", "2021-06-02"),
+    {
+        "valse": ["gsl_1", "pkgconfig"],
+    },
+    [
+        "ArgumentCheck",
+    ],  # lost because gama disappeard from cran
+)
 
-inherit(
-    native_build_inputs,
+
+native_build_inputs.inherit(
     "3.14",
     {
         "archive": ["pkgconfig", "libarchive"],
@@ -2940,7 +2905,6 @@ inherit(
         "rbedrock": ["cmake", "zlib"],
         "strawr": ["curl"],
         "terra": ["gsl_1", "gdal", "pkgconfig", "proj", "sqlite", "geos"],
-        "valse": ["gsl_1"],
         "vapour": ["pkgconfig", "gdal", "proj", "geos", "sqlite"],
         "rsbml": [cran_track_package("libSMBL"), "pkgconfig"],
         "vdiffr": ["libpng"],
@@ -2951,7 +2915,6 @@ inherit(
     },
     [
         "AMORE",
-        "ArgumentCheck",
         "collapse",
         "DEploid",
         "graphscan",
@@ -2964,8 +2927,7 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-10-28"),
     {
         "arrow": [
@@ -2982,24 +2944,21 @@ inherit(
     },
     [],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-11-04"),
     {
         "IP": ["libidn"],
     },
     ["CLA"],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-11-05"),
     {
         "cuda.ml": ["which"],
     },
     [],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-11-06"),
     {},
     [
@@ -3019,19 +2978,16 @@ inherit(
         "rGEDI",
     ],
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-11-08"),
     {"dynr": ["gsl_1"]},
 )
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-11-12"),
     {"agtboost": ["binutils"]},
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-11-17"),
     {},
     [
@@ -3040,8 +2996,7 @@ inherit(
     ],
 )
 
-inherit(
-    native_build_inputs,
+native_build_inputs.inherit(
     ("3.14", "2021-11-18"),
     {},
     [
@@ -3049,12 +3004,11 @@ inherit(
     ],
 )
 
-native_build_inputs = inherit_to_dict(native_build_inputs)
+native_build_inputs = native_build_inputs.to_dict()
 
-build_inputs = []  # run time dependencies
+build_inputs = Inheritor()  # run time dependencies
 # note that in here, it's still 'r packages names', so 'nat.blast', not 'nat_blast'
-inherit(
-    build_inputs,
+build_inputs.inherit(
     "3.0",
     {
         # sort -t '=' -k 2
@@ -3103,8 +3057,7 @@ inherit(
         "XML": ["pkgconfig"],
     },
 )
-inherit(
-    build_inputs,
+build_inputs.inherit(
     "3.1",
     {
         "gridGraphics": ["which"],
@@ -3112,19 +3065,17 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(
-    build_inputs,
+build_inputs.inherit(
     ("3.1", "2015-07-11"),
     {
         "PythonInR": ["python"],
     },
 )
 
-inherit(build_inputs, "3.2", {}, [], copy_anyway=True)
-inherit(build_inputs, ("3.2", "2015-11-21"), {}, ["CARramps", "rpud", "WideLM"])
-inherit(build_inputs, "3.3", {}, [], copy_anyway=True)
-inherit(
-    build_inputs,
+build_inputs.inherit("3.2", {}, [], copy_anyway=True)
+build_inputs.inherit(("3.2", "2015-11-21"), {}, ["CARramps", "rpud", "WideLM"])
+build_inputs.inherit("3.3", {}, [], copy_anyway=True)
+build_inputs.inherit(
     "3.4",
     {
         "tikzDevice": ["which", "pkgs.texlive.combined.scheme-medium"],
@@ -3132,13 +3083,12 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(build_inputs, ("3.4", "2017-03-11"), {}, ["ecoretriever"])
+build_inputs.inherit(("3.4", "2017-03-11"), {}, ["ecoretriever"])
 
-inherit(build_inputs, "3.5", {"gridGraphics": ["imagemagick"]}, [], copy_anyway=True)
+build_inputs.inherit("3.5", {"gridGraphics": ["imagemagick"]}, [], copy_anyway=True)
 
-inherit(build_inputs, "3.6", {}, [], copy_anyway=True)
-inherit(
-    build_inputs,
+build_inputs.inherit("3.6", {}, [], copy_anyway=True)
+build_inputs.inherit(
     ("3.6", "2017-12-19"),
     {},
     [
@@ -3147,26 +3097,23 @@ inherit(
     ],
 )
 
-inherit(
-    build_inputs,
+build_inputs.inherit(
     ("3.6", "2018-02-01"),
     {},
     ["qtutils"],
 )
 
-inherit(
-    build_inputs,
+build_inputs.inherit(
     ("3.6", "2018-03-05"),
     {},
     ["VBmix"],
 )
 
 
-inherit(build_inputs, "3.7", {}, [], copy_anyway=True)
-inherit(build_inputs, "3.8", {}, ["flowQ"], copy_anyway=True)
-inherit(build_inputs, "3.9", {}, [], copy_anyway=True)
-inherit(
-    build_inputs,
+build_inputs.inherit("3.7", {}, [], copy_anyway=True)
+build_inputs.inherit("3.8", {}, ["flowQ"], copy_anyway=True)
+build_inputs.inherit("3.9", {}, [], copy_anyway=True)
+build_inputs.inherit(
     "3.10",
     {
         "tikzDevice": ["which", "pkgs.texlive.combined.scheme-medium"],
@@ -3205,8 +3152,7 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(
-    build_inputs,
+build_inputs.inherit(
     "3.11",
     {},
     [
@@ -3216,11 +3162,10 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(build_inputs, ("3.11", "2020-09-09"), {}, ["qtbase"])  # Todo: fix date
+build_inputs.inherit(("3.11", "2020-09-09"), {}, ["qtbase"])  # Todo: fix date
 
-inherit(build_inputs, "3.12", {}, [], copy_anyway=True)
-inherit(
-    build_inputs,
+build_inputs.inherit("3.12", {}, [], copy_anyway=True)
+build_inputs.inherit(
     "3.13",
     {},
     [
@@ -3229,17 +3174,16 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(build_inputs, "3.14", {}, [], copy_anyway=True)
-inherit(build_inputs, ("3.14", "2021-11-06"), {}, ["spate"])
+build_inputs.inherit("3.14", {}, [], copy_anyway=True)
+build_inputs.inherit(("3.14", "2021-11-06"), {}, ["spate"])
 
 
-build_inputs = inherit_to_dict(build_inputs)
+build_inputs = build_inputs.to_dict()
 
 
-skip_check = []
+skip_check = Inheritor("list")
 # in R names please, not the safe_for_nix names
-inherit_list(
-    skip_check,
+skip_check.inherit(
     "3.0",
     [
         "Rmpi",  # tries to run MPI processes
@@ -3247,23 +3191,21 @@ inherit_list(
         "sprint",  # tries to run MPI processes
     ],
 )
-inherit_list(
-    skip_check,
+skip_check.inherit(
     ("3.0", "2014-10-26"),
     [
         "metaMix",
         "bigGP",
     ],
 )  # tries to run MPI processes
-inherit_list(skip_check, "3.1", [], [], copy_anyway=True)
-inherit_list(skip_check, "3.2", [], [], copy_anyway=True)
-inherit_list(skip_check, "3.3", [], [], copy_anyway=True)
-inherit_list(skip_check, "3.4", [], [], copy_anyway=True)
-inherit_list(skip_check, "3.5", [], [], copy_anyway=True)
-inherit_list(skip_check, "3.6", [], [], copy_anyway=True)
-inherit_list(skip_check, "3.7", [], ["gmatrix", "sprint"], copy_anyway=True)
-inherit_list(
-    skip_check,
+skip_check.inherit("3.1", [], [], copy_anyway=True)
+skip_check.inherit("3.2", [], [], copy_anyway=True)
+skip_check.inherit("3.3", [], [], copy_anyway=True)
+skip_check.inherit("3.4", [], [], copy_anyway=True)
+skip_check.inherit("3.5", [], [], copy_anyway=True)
+skip_check.inherit("3.6", [], [], copy_anyway=True)
+skip_check.inherit("3.7", [], ["gmatrix", "sprint"], copy_anyway=True)
+skip_check.inherit(
     "3.8",
     [
         "HMP16SData",
@@ -3273,8 +3215,7 @@ inherit_list(
     [],
     copy_anyway=True,
 )
-inherit_list(
-    skip_check,
+skip_check.inherit(
     "3.9",
     [
         "FlowSorted.CordBloodCombined.450k",
@@ -3287,8 +3228,7 @@ inherit_list(
     [],
     copy_anyway=True,
 )
-inherit_list(
-    skip_check,
+skip_check.inherit(
     "3.10",
     [
         "RNAmodR.Data",
@@ -3296,8 +3236,7 @@ inherit_list(
     ["gmatrix", "sprint"],
     copy_anyway=True,
 )  # MPI
-inherit_list(
-    skip_check,
+skip_check.inherit(
     "3.11",
     [
         "SCATEData",
@@ -3305,8 +3244,7 @@ inherit_list(
     [],
     copy_anyway=True,
 )
-inherit_list(
-    skip_check,
+skip_check.inherit(
     "3.12",
     [
         "clustifyrdatahub",
@@ -3316,8 +3254,7 @@ inherit_list(
     [],
     copy_anyway=True,
 )
-inherit_list(
-    skip_check,
+skip_check.inherit(
     "3.13",
     [
         # many (all?) AnnotationHub dependend packages trie to download / write to home during install
@@ -3335,8 +3272,7 @@ inherit_list(
     [],
     copy_anyway=True,
 )
-inherit_list(
-    skip_check,
+skip_check.inherit(
     "3.14",
     [
         # many (all?) AnnotationHub dependend packages trie to download / write to home during install
@@ -3351,8 +3287,8 @@ inherit_list(
 )
 
 
-skip_check = inherit_to_dict(skip_check)
-# inherit_list( skip_check,"3.2", [], [], copy_anyway=True)
+skip_check = skip_check.to_dict()
+# skip_check.inherit("3.2", [], [], copy_anyway=True)
 
 
 needs_x = set(  # let's presume they never go from 'need X' no 'not need X'
@@ -3413,9 +3349,8 @@ needs_rust = {
 
 patches_by_package_version = {}
 
-patches = []
-inherit(
-    patches,
+patches = Inheritor("dict")
+patches.inherit(
     "3.0",
     {
         "affy": ["affy_1.44.no_bioc_installer.patch"],
@@ -3443,8 +3378,7 @@ inherit(
     },
 )
 
-inherit(
-    patches,
+patches.inherit(
     ("3.0", "2015-01-11"),
     {
         "RMySQL": ["RMySQL.patch"],
@@ -3452,8 +3386,7 @@ inherit(
 )
 
 
-inherit(
-    patches,
+patches.inherit(
     "3.1",
     {
         "qtbase": ["qtbase.patch"],
@@ -3462,27 +3395,24 @@ inherit(
     },
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     ("3.1", "2015-05-29"),
     {
         "qtbase": ["qtbase_1.0.9.patch"],
     },  # bc 3.1
 )
-inherit(patches, ("3.1", "2015-10-01"), {}, ["RMySQL"])
+patches.inherit(("3.1", "2015-10-01"), {}, ["RMySQL"])
 
-inherit(
-    patches,
+patches.inherit(
     "3.2",
     {
         "qtbase": ["qtbase_1.0.9.patch"],
     },
     copy_anyway=True,
 )
-inherit(patches, "3.3", {}, ["CARramps", "rpud", "WideLM"], copy_anyway=True)
-inherit(patches, "3.4", {}, copy_anyway=True)
-inherit(
-    patches,
+patches.inherit("3.3", {}, ["CARramps", "rpud", "WideLM"], copy_anyway=True)
+patches.inherit("3.4", {}, copy_anyway=True)
+patches.inherit(
     "3.5",
     {
         "redland": ["redland.patch"],
@@ -3496,16 +3426,14 @@ inherit(
     },
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     "3.6",
     {
         "multiMiR": ["multiMiR.patch"],  # must prevent net access during install
     },
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     "3.7",
     {
         "tesseract": ["tesseract.patch"],
@@ -3520,16 +3448,14 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     "3.8",
     {},
     ["affy", "gcrma", "affylmGUI", "webbioc"],
     copy_anyway=True,
 )
-inherit(patches, "3.9", {}, ["RAppArmor"], copy_anyway=True)
-inherit(
-    patches,
+patches.inherit("3.9", {}, ["RAppArmor"], copy_anyway=True)
+patches.inherit(
     "3.10",
     {
         "Rhdf5lib": ["Rhdf5lib.patch"],
@@ -3543,8 +3469,7 @@ inherit(
     ],
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     "3.11",
     {
         "snapcount": ["snapcount.patch"],
@@ -3553,8 +3478,7 @@ inherit(
     ["mongolite"],
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     "3.12",
     {
         "rfaRm": ["rfaRm.patch"],  # try() around on-load network access
@@ -3563,8 +3487,7 @@ inherit(
     ["qtbase", "SDMTools"],
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     "3.13",
     {
         "immunotation": [
@@ -3584,30 +3507,32 @@ inherit(
     [],
     copy_anyway=True,
 )
-inherit(
-    patches,
+patches.inherit(
     ("3.13", "2021-05-31"),
     {
         "salso": ["salso_0.22.patch"],
     },
 )
+patches.inherit(
+    ("3.13", "2021-06-02"),
+    {
+        "valse": ["valse.patch"],
+    },
+)
 
-inherit(
-    patches,
+patches.inherit(
     "3.14",
     {
         "immunotation": ["immunotation.patch"],  # try() around on-load network access
         "robis": ["robis.patch"],
         "x13binary": ["x13binary_1.57.patch"],
         "signatureSearch": ["signatureSearch.patch"],
-        "valse": ["valse.patch"],
     },
     ["GeneBook", "salso"],
     copy_anyway=True,
 )
-inherit(patches, ("3.14", "2021-11-08"), {}, ["nearfar"])
-inherit(
-    patches,
+patches.inherit(("3.14", "2021-11-08"), {}, ["nearfar"])
+patches.inherit(
     ("3.14", "2021-11-18"),
     {
         "RKEELjars": [
@@ -3617,9 +3542,9 @@ inherit(
 )
 
 
-patches = inherit_to_dict(patches)
+patches = patches.to_dict()
 
-attrs = []
+attrs = Inheritor()
 shebangs = {"postPatch": "patchShebangs configure"}
 fix_strip = {  # don't forget to add binutils to the native_build_inputs
     "postPatch": 'substituteInPlace src/Makevars --replace "/usr/bin/strip" "strip"'
@@ -3627,8 +3552,7 @@ fix_strip = {  # don't forget to add binutils to the native_build_inputs
 fake_home = {
     "HOME": "$TMPDIR",  # cache will be recreated if missing during runtime, so no problem here
 }
-inherit(
-    attrs,
+attrs.inherit(
     "3.0",
     {
         "CARramps": {
@@ -3701,8 +3625,7 @@ inherit(
         },
     },
 )
-inherit(
-    attrs,
+attrs.inherit(
     ("3.0", "2014-10-22"),
     {
         "openssl": {
@@ -3711,15 +3634,13 @@ inherit(
         },
     },
 )
-inherit(
-    attrs,
+attrs.inherit(
     ("3.0", "2014-11-21"),
     {
         "curl": {"preConfigure": "export CURL_INCLUDES=${pkgs.curl}/include"},
     },
 )
-inherit(
-    attrs,
+attrs.inherit(
     ("3.0", "2014-12-09"),
     {
         "V8": {
@@ -3729,8 +3650,7 @@ inherit(
 )
 
 
-inherit(
-    attrs,
+attrs.inherit(
     "3.1",
     {
         "HierO": {
@@ -3743,8 +3663,7 @@ head /build/HierO/R/HierO.R -n 5
     copy_anyway=True,
 )
 
-inherit(
-    attrs,
+attrs.inherit(
     ("3.1", "2015-04-21"),
     {
         "xml2": {
@@ -3754,14 +3673,12 @@ inherit(
 )
 
 
-inherit(
-    attrs,
+attrs.inherit(
     ("3.1", "2015-05-28"),
     {"OpenMx": shebangs},
 )
 
-inherit(
-    attrs,
+attrs.inherit(
     ("3.1", "2015-10-01"),
     {
         "curl": shebangs,
@@ -3771,8 +3688,7 @@ inherit(
     },
 )
 
-inherit(
-    attrs,
+attrs.inherit(
     "3.2",
     {
         "Rsomoclu": shebangs,
@@ -3787,16 +3703,14 @@ inherit(
     },
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     ("3.2", "2016-01-10"),
     {
         "gdtools": shebangs,
     },
     ["CARramps", "rpud", "WideLM"],
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.3",
     {
         "RKEELjars": {
@@ -3813,8 +3727,7 @@ inherit(
     },
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.4",
     {
         "RVowpalWabbit": {
@@ -3827,8 +3740,7 @@ inherit(
     ["SJava"],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.5",
     {
         "protolite": shebangs,
@@ -3889,8 +3801,7 @@ substituteInPlace src/Makefile \
     },
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.6",
     {
         "cld3": shebangs,
@@ -3929,8 +3840,7 @@ inherit(
     },
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.7",
     {
         "walker": shebangs,
@@ -3948,8 +3858,7 @@ sha256 = "10rx41n8i90y91v138m3yx22zblzh9inlcrl4ghkbywlj5i16vzh";
     copy_anyway=True,
 )
 
-inherit(
-    attrs,
+attrs.inherit(
     "3.8",
     {
         "pdftools": shebangs,
@@ -3967,8 +3876,7 @@ inherit(
     ["Mposterior", "rpf"],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.9",
     {
         "av": shebangs,
@@ -4004,8 +3912,7 @@ sha256 = "10rx41n8i90y91v138m3yx22zblzh9inlcrl4ghkbywlj5i16vzh";
     ["MAINT.Data"],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.10",
     {
         "arrow": shebangs,
@@ -4083,8 +3990,7 @@ sha256 = "10rx41n8i90y91v138m3yx22zblzh9inlcrl4ghkbywlj5i16vzh";
     [],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.11",
     {
         "cytolib": shebangs,
@@ -4127,8 +4033,7 @@ inherit(
     ["JuniperKernel", "rPython", "uavRst"],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.12",
     {
         "data.table": shebangs,
@@ -4158,8 +4063,7 @@ inherit(
     ["Rsomoclu", "fastrtext", "websocket"],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.13",
     {
         #
@@ -4225,8 +4129,7 @@ cp $jarSource/h2o.jar /build/h2o/inst/java
     ["rpg", "caviarpd"],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     "3.14",
     {
         "cuml4r": shebangs,
@@ -4275,36 +4178,32 @@ sha256 = "0lpn41lvj4k38ld1w2v9q99gm4bs35ja2zygrndax12rk2a6qjf4";
     ["freetypeharfbuzz", "collapse"],
     copy_anyway=True,
 )
-inherit(
-    attrs,
+attrs.inherit(
     ("3.14", "2021-10-30"),
     {
         "fixest->": fake_home,
     },
 )
-inherit(
-    attrs,
+attrs.inherit(
     ("3.14", "2021-11-05"),
     {
         "cuda.ml": shebangs,
     },
 )
-inherit(attrs, ("3.14", "2021-11-06"), {}, ["BALD", "rGEDI"])
-inherit(
-    attrs,
+attrs.inherit(("3.14", "2021-11-06"), {}, ["BALD", "rGEDI"])
+attrs.inherit(
     ("3.14", "2021-11-12"),
     {
         "agtboost": fix_strip,
     },
 )
-inherit(attrs, ("3.14", "2021-11-17"), {}, ["kgrams"])
+attrs.inherit(("3.14", "2021-11-17"), {}, ["kgrams"])
 
 
-attrs = inherit_to_dict(attrs)
+attrs = attrs.to_dict()
 
-overrideDerivations = []
-inherit(
-    overrideDerivations,
+overrideDerivations = Inheritor()
+overrideDerivations.inherit(
     "3.10",
     {
         "data.table": nl(
@@ -4321,7 +4220,7 @@ inherit(
     },
 )
 
-overrideDerivations = inherit_to_dict(overrideDerivations)
+overrideDerivations = overrideDerivations.to_dict()
 
 # dates at which we also need to build the r_eco_system
 # build from above
