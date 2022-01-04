@@ -36,7 +36,9 @@ flake.nix:
   description = "test flake to check package build";
 
   inputs = rec {
-    r_flake.url = "github:TyberiusPrime/r_ecosystem_track?rev=2021-10-29_1" # that's bioconductor 3.14, one day post release date
+    r_flake.url = "github:TyberiusPrime/r_ecosystem_track?rev=e39d7014b32f43fe82785a8e9701cfd0ece9854d" # that's bioconductor 3.14, one day post release date
+    # newer nix might support '2021-10-29_1' here - otherwise
+    # see the r_ecosystem_track repo for the required hashes if
   };
 
   outputs = { self, r_flake}: {
